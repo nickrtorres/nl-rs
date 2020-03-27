@@ -104,8 +104,8 @@ impl<'a> NumberingType<'a> {
             "t" => Ok(NumberingType::NonEmpty),
             "n" => Ok(NumberingType::None),
             _ => {
-                // if we're here we were either given an unsupported numbering
-                // type or 'p' with a regex
+                // if we're here we were either given an unsupported
+                // numbering type or 'p' with a regex
                 if !s.starts_with("p") {
                     return Err(BadNumberingType::UnsupportedType(s));
                 }
