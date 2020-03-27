@@ -190,7 +190,7 @@ mod tests {
     fn it_recognizes_unsupported_numbering_types() {
         let t = NumberingType::from_opt("zzz");
         assert!(t.is_err());
-        assert_eq!(BadNumberingType::UnsupportedType, t.unwrap_err());
+        assert_eq!(BadNumberingType::UnsupportedType("zzz"), t.unwrap_err());
     }
 
     #[test]
