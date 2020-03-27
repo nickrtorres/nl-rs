@@ -110,7 +110,6 @@ impl<'a> NumberingType<'a> {
                     return Err(BadNumberingType::UnsupportedType(s));
                 }
 
-                eprintln!("s => {} ; len => {}", s, s.len());
                 if !(s.len() > 1) {
                     return Err(BadNumberingType::EmptyRegex);
                 }
