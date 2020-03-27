@@ -1,3 +1,6 @@
+use clap::{App, Arg};
+use std::fmt;
+use std::process::exit;
 /// This implementation references (1) apple's and (2) illumos's. As such, both
 /// copyrights are provided below for brevity:
 ///
@@ -64,10 +67,63 @@
 ///
 ///	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
 ///	  All Rights Reserved
-use clap::{App, Arg};
+
+static PROG_NAME: &'static str = "nl";
+
+#[derive(PartialEq, Debug)]
+enum NumberingType<'a> {
+    All,
+    NonEmpty,
+    None,
+    Regex(&'a str),
+}
+
+#[derive(PartialEq, Debug)]
+enum BadNumberingType<'a> {
+    UnsupportedType(&'a str),
+    EmptyRegex,
+}
+
+impl<'a> fmt::Display for BadNumberingType<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BadNumberingType::UnsupportedType(t) => {
+                write!(f, "illegal body line numbering type -- {}", t)
+            }
+            BadNumberingType::EmptyRegex => {
+                write!(f, "body expr: empty (sub)expression --")
+            }
+        }
+    }
+}
+
+impl<'a> NumberingType<'a> {
+    fn from_opt(s: &'a str) -> Result<NumberingType<'a>, BadNumberingType> {
+        match s {
+            "a" => Ok(NumberingType::All),
+            "t" => Ok(NumberingType::NonEmpty),
+            "n" => Ok(NumberingType::None),
+            _ => {
+                // if we're here we were either given an unsupported numbering
+                // type or 'p' with a regex
+                if !s.starts_with("p") {
+                    return Err(BadNumberingType::UnsupportedType(s));
+                }
+
+                eprintln!("s => {} ; len => {}", s, s.len());
+                if !(s.len() > 1) {
+                    return Err(BadNumberingType::EmptyRegex);
+                }
+
+                let (_p, regex) = s.split_at(1);
+                Ok(NumberingType::Regex(regex))
+            }
+        }
+    }
+}
 
 fn main() {
-    let args = App::new("nl")
+    let args = App::new(PROG_NAME)
         .version("0.0.1")
         .arg(Arg::with_name("body-type").short("b").takes_value(true))
         .arg(Arg::with_name("delim").short("d").takes_value(true))
@@ -81,4 +137,66 @@ fn main() {
         .arg(Arg::with_name("width").short("w").takes_value(true))
         .arg(Arg::with_name("file").index(1).takes_value(true))
         .get_matches();
+
+    let _body_type = if args.is_present("body-type") {
+        match NumberingType::from_opt(args.value_of("body-type").unwrap()) {
+            Ok(t) => t,
+            Err(e) => perror(e),
+        }
+    } else {
+        // XSI: "The default type for logical page body shall be t (text lines numbered)"
+        NumberingType::NonEmpty
+    };
+}
+
+fn perror<T: fmt::Display>(e: T) -> ! {
+    eprintln!("{}: {}", PROG_NAME, e);
+    exit(1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_can_build_numbering_type_all() {
+        let t = NumberingType::from_opt("a");
+        assert!(t.is_ok());
+        assert_eq!(NumberingType::All, t.unwrap());
+    }
+
+    #[test]
+    fn it_can_build_numbering_type_non_empty() {
+        let t = NumberingType::from_opt("t");
+        assert!(t.is_ok());
+        assert_eq!(NumberingType::NonEmpty, t.unwrap());
+    }
+
+    #[test]
+    fn it_can_build_numbering_type_none() {
+        let t = NumberingType::from_opt("n");
+        assert!(t.is_ok());
+        assert_eq!(NumberingType::None, t.unwrap());
+    }
+
+    #[test]
+    fn it_can_build_numbering_type_regex() {
+        let t = NumberingType::from_opt("p^foobar");
+        assert!(t.is_ok());
+        assert_eq!(NumberingType::Regex("^foobar"), t.unwrap());
+    }
+
+    #[test]
+    fn it_recognizes_unsupported_numbering_types() {
+        let t = NumberingType::from_opt("zzz");
+        assert!(t.is_err());
+        assert_eq!(BadNumberingType::UnsupportedType, t.unwrap_err());
+    }
+
+    #[test]
+    fn it_recognizes_empty_regex() {
+        let t = NumberingType::from_opt("p");
+        assert!(t.is_err());
+        assert_eq!(BadNumberingType::EmptyRegex, t.unwrap_err());
+    }
 }
