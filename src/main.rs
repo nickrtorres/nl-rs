@@ -98,7 +98,7 @@ impl<'a> fmt::Display for BadNumberingType<'a> {
 }
 
 impl<'a> NumberingType<'a> {
-    fn from_opt(s: &'a str) -> Result<NumberingType<'a>, BadNumberingType> {
+    fn from_opt(s: &str) -> Result<NumberingType, BadNumberingType> {
         match s {
             "a" => Ok(NumberingType::All),
             "t" => Ok(NumberingType::NonEmpty),
