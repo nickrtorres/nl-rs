@@ -148,6 +148,7 @@ fn main() {
     };
 }
 
+/// TODO: put this in a crate?
 fn perror<T: fmt::Display>(e: T) -> ! {
     eprintln!("{}: {}", PROG_NAME, e);
     exit(1);
