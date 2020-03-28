@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use regex::{Error, Regex};
 use std::fmt;
 use std::process::exit;
 /// This implementation references (1) apple's and (2) illumos's. As such, both
