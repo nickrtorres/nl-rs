@@ -197,7 +197,7 @@ fn main() {
     match args.value_of("file") {
         Some(f) => match File::open(f) {
             Ok(f) => filter(&mut BufReader::new(f), startnum, &body_type),
-            Err(e) => NL.perror(&e),
+            Err(e) => NL.perror(format!("{}: {}", f, e)),
         },
         None => filter(&mut stdin.lock(), startnum, &body_type),
     }
