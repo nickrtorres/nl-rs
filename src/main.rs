@@ -293,7 +293,7 @@ impl<'a> Cli<'a> {
             };
 
             if donumber {
-                print!("{}", num);
+                print!("{}", self.format.as_string(num, self.width));
             }
 
             print!("\t{}", buf);
