@@ -149,13 +149,11 @@ impl LineNumberFormat {
         }
     }
 
-    fn as_string(&self, line: u32, width: usize) -> String {
+    fn as_string(&self, num: u32, width: usize) -> String {
         match self {
-            LineNumberFormat::Ln => format!("{:<width$}", line, width = width),
-            LineNumberFormat::Rn => format!("{:>width$}", line, width = width),
-            LineNumberFormat::Rz => {
-                format!("{:0>width$}", line, width = width)
-            }
+            LineNumberFormat::Ln => format!("{:<width$}", num, width = width),
+            LineNumberFormat::Rn => format!("{:>width$}", num, width = width),
+            LineNumberFormat::Rz => format!("{:0>width$}", num, width = width),
         }
     }
 }
