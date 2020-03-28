@@ -1,6 +1,8 @@
 use clap::{App, Arg};
 use regex::{Error, Regex};
 use std::fmt;
+use std::fs::File;
+use std::io::{stdin, BufRead, BufReader};
 use std::process::exit;
 /// This implementation references (1) apple's and (2) illumos's. As such, both
 /// copyrights are provided below for brevity:
@@ -129,6 +131,39 @@ impl NumberingType {
     }
 }
 
+fn filter<T: BufRead>(
+    input: &mut T,
+    startnum: u32,
+    numbering: &NumberingType,
+) {
+    let mut buf = String::with_capacity(1024);
+    let mut num = startnum;
+    while let Ok(s) = input.read_line(&mut buf) {
+        if s == 0 {
+            return;
+        }
+
+        let donumber = match numbering {
+            NumberingType::All => true,
+            NumberingType::NonEmpty => !(s == 1 && buf.starts_with("\n")),
+            NumberingType::Regex(re) => re.is_match(&buf),
+            _ => false,
+        };
+
+        if donumber {
+            print!("{}", num);
+        }
+
+        print!("{}", buf);
+
+        if donumber {
+            num += 1;
+        }
+
+        buf.clear();
+    }
+}
+
 fn main() {
     let args = App::new(PROG_NAME)
         .version("0.0.1")
@@ -145,7 +180,7 @@ fn main() {
         .arg(Arg::with_name("file").index(1).takes_value(true))
         .get_matches();
 
-    let _body_type = if args.is_present("body-type") {
+    let body_type = if args.is_present("body-type") {
         match NumberingType::from_opt(args.value_of("body-type").unwrap()) {
             Ok(t) => t,
             Err(e) => perror(e),
@@ -154,6 +189,15 @@ fn main() {
         // XSI: "The default type for logical page body shall be t (text lines numbered)"
         NumberingType::NonEmpty
     };
+
+    let stdin = stdin();
+    match args.value_of("file") {
+        Some(f) => match File::open(f) {
+            Ok(f) => filter(&mut BufReader::new(f), 1, &body_type),
+            Err(e) => perror(e),
+        },
+        None => filter(&mut stdin.lock(), 1, &body_type),
+    }
 }
 
 /// TODO: put this in a crate?
