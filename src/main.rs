@@ -64,7 +64,7 @@
 //
 //	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
 //	  All Rights Reserved
-use clap::{value_t, App, Arg};
+use clap::{App, Arg};
 use lazy_static::lazy_static;
 use program::Program;
 use regex::{Error, Regex};
