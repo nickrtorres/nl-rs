@@ -82,27 +82,25 @@ enum NumberingType {
 
 #[derive(PartialEq, Debug)]
 enum NlError<'a> {
-    UnsupportedNumberingType(&'a str),
-    EmptyRegex,
     BadRegex(Error),
-    UnsupportedNumberingFormat(&'a str),
+    EmptyRegex,
+    IllegalFormat(&'a str),
+    IllegalNumberingType(&'a str),
 }
 
 impl<'a> fmt::Display for NlError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NlError::UnsupportedNumberingType(t) => {
-                write!(f, "illegal body line numbering type -- {}", t)
+            NlError::BadRegex(e) => {
+                write!(f, "body expr: ill formed regex -- {}", e)
             }
             NlError::EmptyRegex => {
                 write!(f, "body expr: empty (sub)expression --")
             }
-            NlError::BadRegex(e) => {
-                write!(f, "body expr: ill formed regex -- {}", e)
+            NlError::IllegalNumberingType(t) => {
+                write!(f, "illegal body line numbering type -- {}", t)
             }
-            NlError::UnsupportedNumberingFormat(e) => {
-                write!(f, "illegal format -- {}", e)
-            }
+            NlError::IllegalFormat(e) => write!(f, "illegal format -- {}", e),
         }
     }
 }
@@ -117,7 +115,7 @@ impl NumberingType {
                 // if we're here we were either given an unsupported
                 // numbering type or 'p' with a regex
                 if !s.starts_with("p") {
-                    return Err(NlError::UnsupportedNumberingType(s));
+                    return Err(NlError::IllegalNumberingType(s));
                 }
 
                 if !(s.len() > 1) {
@@ -181,7 +179,7 @@ impl LineNumberFormat {
             "ln" => Ok(LineNumberFormat::Ln),
             "rn" => Ok(LineNumberFormat::Rn),
             "rz" => Ok(LineNumberFormat::Rz),
-            _ => Err(NlError::UnsupportedNumberingFormat(opt)),
+            _ => Err(NlError::IllegalFormat(opt)),
         }
     }
 
@@ -203,17 +201,17 @@ lazy_static! {
 fn main() {
     let args = App::new(NL.name)
         .version("0.0.1")
+        .arg(Arg::with_name("blanks").short("l").takes_value(true))
         .arg(Arg::with_name("body-type").short("b").takes_value(true))
         .arg(Arg::with_name("delim").short("d").takes_value(true))
+        .arg(Arg::with_name("file").index(1).takes_value(true))
         .arg(Arg::with_name("footer-type").short("f").takes_value(true))
+        .arg(Arg::with_name("format").short("n").takes_value(true))
         .arg(Arg::with_name("header-type").short("h").takes_value(true))
         .arg(Arg::with_name("increment").short("i").takes_value(true))
-        .arg(Arg::with_name("blanks").short("l").takes_value(true))
-        .arg(Arg::with_name("format").short("n").takes_value(true))
-        .arg(Arg::with_name("restart-at-page").short("p"))
         .arg(Arg::with_name("initial-value").short("v").takes_value(true))
+        .arg(Arg::with_name("restart-at-page").short("p"))
         .arg(Arg::with_name("width").short("w").takes_value(true))
-        .arg(Arg::with_name("file").index(1).takes_value(true))
         .get_matches();
 
     // XSI: "The default *type* for logical page body shall be **t** (text lines numbered)"
@@ -304,7 +302,7 @@ mod tests {
     fn it_recognizes_unsupported_numbering_types() {
         let t = NumberingType::from_opt("zzz");
         assert!(t.is_err());
-        assert_eq!(NlError::UnsupportedNumberingType("zzz"), t.unwrap_err());
+        assert_eq!(NlError::IllegalNumberingType("zzz"), t.unwrap_err());
     }
 
     #[test]
