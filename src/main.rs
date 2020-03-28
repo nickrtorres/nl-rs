@@ -132,40 +132,6 @@ impl NumberingType {
     }
 }
 
-fn filter<T: BufRead>(
-    input: &mut T,
-    startnum: u32,
-    numbering: &NumberingType,
-    width: u32,
-) {
-    let mut buf = String::with_capacity(1024);
-    let mut num = startnum;
-    while let Ok(s) = input.read_line(&mut buf) {
-        if s == 0 {
-            return;
-        }
-
-        let donumber = match numbering {
-            NumberingType::All => true,
-            NumberingType::NonEmpty => !(s == 1 && buf.starts_with("\n")),
-            NumberingType::Regex(re) => re.is_match(&buf),
-            _ => false,
-        };
-
-        if donumber {
-            print!("{}", num);
-        }
-
-        print!("\t{}", buf);
-
-        if donumber {
-            num += 1;
-        }
-
-        buf.clear();
-    }
-}
-
 #[derive(Debug, PartialEq)]
 enum LineNumberFormat {
     Ln,
@@ -198,6 +164,149 @@ lazy_static! {
     static ref NL: Program = Program::new("nl");
 }
 
+struct Cli<'a> {
+    program: &'static Program,
+    blanks: u32,
+    body: NumberingType,
+    delim: &'a str,
+    footer: NumberingType,
+    format: LineNumberFormat,
+    header: NumberingType,
+    increment: u32,
+    startnum: u32,
+    restart: bool,
+    width: u32,
+}
+
+impl<'a> Cli<'a> {
+    fn new(program: &'static Program) -> Self {
+        Cli {
+            program: program,
+            blanks: 1,
+            body: NumberingType::NonEmpty,
+            delim: "\\:",
+            footer: NumberingType::NonEmpty,
+            format: LineNumberFormat::Rn,
+            header: NumberingType::NonEmpty,
+            increment: 1,
+            startnum: 1,
+            restart: true,
+            width: 6,
+        }
+    }
+
+    // stub
+    fn blanks(self, blanks: Option<&str>) -> Self {
+        self
+    }
+
+    fn body(mut self, body: Option<&str>) -> Self {
+        match body {
+            Some(b) => match NumberingType::from_opt(b) {
+                Ok(b) => {
+                    self.body = b;
+                    self
+                }
+                Err(e) => NL.perror(e),
+            },
+            None => self,
+        }
+    }
+
+    // stub
+    fn delim(self, delim: Option<&str>) -> Self {
+        self
+    }
+
+    fn footer(mut self, footer: Option<&str>) -> Self {
+        match footer {
+            Some(b) => match NumberingType::from_opt(b) {
+                Ok(b) => {
+                    self.footer = b;
+                    self
+                }
+                Err(e) => NL.perror(e),
+            },
+            None => self,
+        }
+    }
+
+    fn format(mut self, format: Option<&str>) -> Self {
+        match format {
+            Some(f) => match LineNumberFormat::from_opt(f) {
+                Ok(f) => {
+                    self.format = f;
+                    self
+                }
+                Err(e) => NL.perror(e),
+            },
+            None => self,
+        }
+    }
+
+    fn header(mut self, header: Option<&str>) -> Self {
+        match header {
+            Some(b) => match NumberingType::from_opt(b) {
+                Ok(b) => {
+                    self.header = b;
+                    self
+                }
+                Err(e) => NL.perror(e),
+            },
+            None => self,
+        }
+    }
+
+    // stub
+    fn increment(self, increment: Option<&str>) -> Self {
+        self
+    }
+
+    // stub
+    fn startnum(self, startnum: Option<&str>) -> Self {
+        self
+    }
+
+    // stub
+    fn restart(self, startnum: Option<&str>) -> Self {
+        self
+    }
+
+    // stub
+    fn width(self, width: Option<&str>) -> Self {
+        self
+    }
+
+    fn filter<T: BufRead>(self, mut input: T) {
+        let mut buf = String::with_capacity(1024);
+        let mut num = self.startnum;
+        while let Ok(s) = input.read_line(&mut buf) {
+            if s == 0 {
+                return;
+            }
+
+            let donumber = match &self.body {
+                NumberingType::All => true,
+                NumberingType::NonEmpty => !(s == 1 && buf.starts_with("\n")),
+                NumberingType::Regex(re) => re.is_match(&buf),
+                _ => false,
+            };
+
+            if donumber {
+                print!("{}", num);
+            }
+
+            print!("\t{}", buf);
+
+            if donumber {
+                num += 1;
+            }
+
+            buf.clear();
+        }
+    }
+}
+
 fn main() {
     let args = App::new(NL.name)
         .version("0.0.1")
@@ -214,38 +323,25 @@ fn main() {
         .arg(Arg::with_name("width").short("w").takes_value(true))
         .get_matches();
 
-    // XSI: "The default *type* for logical page body shall be **t** (text lines numbered)"
-    let body_type = match NumberingType::from_opt(
-        args.value_of("body-type").unwrap_or("t"),
-    ) {
-        Ok(t) => t,
-        Err(e) => NL.perror(e),
-    };
-
-    let startnum = value_t!(args.value_of("initial-value"), u32).unwrap_or(1);
-
-    // XSI: "The default *width* shall be 6"
-    let width = value_t!(args.value_of("width"), u32).unwrap_or(6);
-
-    // XSI: The default format shall be **rn**
-    let format = if args.is_present("format") {
-        match LineNumberFormat::from_opt(args.value_of("format").unwrap()) {
-            Ok(f) => f,
-            Err(e) => NL.perror(e),
-        }
-    } else {
-        LineNumberFormat::Rn
-    };
+    let cli = Cli::new(&NL)
+        .blanks(args.value_of("blanks"))
+        .body(args.value_of("body-type"))
+        .delim(args.value_of("delim"))
+        .footer(args.value_of("footer-type"))
+        .format(args.value_of("format"))
+        .header(args.value_of("header-type"))
+        .increment(args.value_of("increment"))
+        .startnum(args.value_of("initial-value"))
+        .restart(args.value_of("restart-at-page"))
+        .width(args.value_of("width"));
 
     let stdin = stdin();
     match args.value_of("file") {
         Some(f) => match File::open(f) {
-            Ok(f) => {
-                filter(&mut BufReader::new(f), startnum, &body_type, width)
-            }
+            Ok(f) => cli.filter(&mut BufReader::new(f)),
             Err(e) => NL.perror(format!("{}: {}", f, e)),
         },
-        None => filter(&mut stdin.lock(), startnum, &body_type, width),
+        None => cli.filter(&mut stdin.lock()),
     }
 }
 
