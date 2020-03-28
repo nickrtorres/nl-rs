@@ -1,19 +1,20 @@
-use clap::{App, Arg};
+use clap::{value_t, App, Arg};
+use lazy_static::lazy_static;
+use program::Program;
 use regex::{Error, Regex};
 use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader};
-use std::process::exit;
 /// This implementation references (1) apple's and (2) illumos's. As such, both
 /// copyrights are provided below for brevity:
 ///
 /// (1)
 /// Copyright (c) 1999 The NetBSD Foundation, Inc.
 /// All rights reserved.
-//
+///
 /// This code is derived from software contributed to The NetBSD Foundation
 /// by Klaus Klein.
-//
+///
 /// Redistribution and use in source and binary forms, with or without
 /// modification, are permitted provided that the following conditions
 /// are met:
@@ -29,7 +30,7 @@ use std::process::exit;
 /// 4. Neither the name of The NetBSD Foundation nor the names of its
 ///    contributors may be used to endorse or promote products derived
 ///    from this software without specific prior written permission.
-//
+///
 /// THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
 /// ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
 /// TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
@@ -70,8 +71,6 @@ use std::process::exit;
 ///
 ///	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
 ///	  All Rights Reserved
-
-static PROG_NAME: &'static str = "nl";
 
 #[derive(Debug)]
 enum NumberingType {
@@ -164,8 +163,12 @@ fn filter<T: BufRead>(
     }
 }
 
+lazy_static! {
+    static ref NL: Program = Program::new("nl");
+}
+
 fn main() {
-    let args = App::new(PROG_NAME)
+    let args = App::new(NL.name)
         .version("0.0.1")
         .arg(Arg::with_name("body-type").short("b").takes_value(true))
         .arg(Arg::with_name("delim").short("d").takes_value(true))
@@ -180,30 +183,24 @@ fn main() {
         .arg(Arg::with_name("file").index(1).takes_value(true))
         .get_matches();
 
-    let body_type = if args.is_present("body-type") {
-        match NumberingType::from_opt(args.value_of("body-type").unwrap()) {
-            Ok(t) => t,
-            Err(e) => perror(e),
-        }
-    } else {
-        // XSI: "The default type for logical page body shall be t (text lines numbered)"
-        NumberingType::NonEmpty
+    // XSI: "The default *type* for logical page body shall be **t** (text lines numbered)"
+    let body_type = match NumberingType::from_opt(
+        args.value_of("body-type").unwrap_or("t"),
+    ) {
+        Ok(t) => t,
+        Err(e) => NL.perror(&e),
     };
+
+    let startnum = value_t!(args.value_of("initial-value"), u32).unwrap_or(1);
 
     let stdin = stdin();
     match args.value_of("file") {
         Some(f) => match File::open(f) {
-            Ok(f) => filter(&mut BufReader::new(f), 1, &body_type),
-            Err(e) => perror(e),
+            Ok(f) => filter(&mut BufReader::new(f), startnum, &body_type),
+            Err(e) => NL.perror(&e),
         },
-        None => filter(&mut stdin.lock(), 1, &body_type),
+        None => filter(&mut stdin.lock(), startnum, &body_type),
     }
-}
-
-/// TODO: put this in a crate?
-fn perror<T: fmt::Display>(e: T) -> ! {
-    eprintln!("{}: {}", PROG_NAME, e);
-    exit(1);
 }
 
 #[cfg(test)]
