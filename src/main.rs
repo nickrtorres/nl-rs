@@ -154,7 +154,7 @@ fn filter<T: BufRead>(
             print!("{}", num);
         }
 
-        print!("{}", buf);
+        print!("\t{}", buf);
 
         if donumber {
             num += 1;
