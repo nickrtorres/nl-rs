@@ -81,30 +81,34 @@ enum NumberingType {
 }
 
 #[derive(PartialEq, Debug)]
-enum BadNumberingType<'a> {
-    UnsupportedType(&'a str),
+enum NlError<'a> {
+    UnsupportedNumberingType(&'a str),
     EmptyRegex,
     BadRegex(Error),
+    UnsupportedNumberingFormat(&'a str),
 }
 
-impl<'a> fmt::Display for BadNumberingType<'a> {
+impl<'a> fmt::Display for NlError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BadNumberingType::UnsupportedType(t) => {
+            NlError::UnsupportedNumberingType(t) => {
                 write!(f, "illegal body line numbering type -- {}", t)
             }
-            BadNumberingType::EmptyRegex => {
+            NlError::EmptyRegex => {
                 write!(f, "body expr: empty (sub)expression --")
             }
-            BadNumberingType::BadRegex(e) => {
+            NlError::BadRegex(e) => {
                 write!(f, "body expr: ill formed regex -- {}", e)
+            }
+            NlError::UnsupportedNumberingFormat(e) => {
+                write!(f, "illegal format -- {}", e)
             }
         }
     }
 }
 
 impl NumberingType {
-    fn from_opt(s: &str) -> Result<NumberingType, BadNumberingType> {
+    fn from_opt(s: &str) -> Result<NumberingType, NlError> {
         match s {
             "a" => Ok(NumberingType::All),
             "t" => Ok(NumberingType::NonEmpty),
@@ -113,17 +117,17 @@ impl NumberingType {
                 // if we're here we were either given an unsupported
                 // numbering type or 'p' with a regex
                 if !s.starts_with("p") {
-                    return Err(BadNumberingType::UnsupportedType(s));
+                    return Err(NlError::UnsupportedNumberingType(s));
                 }
 
                 if !(s.len() > 1) {
-                    return Err(BadNumberingType::EmptyRegex);
+                    return Err(NlError::EmptyRegex);
                 }
 
                 let (_p, re) = s.split_at(1);
                 match Regex::new(re) {
                     Ok(re) => Ok(NumberingType::Regex(re)),
-                    Err(e) => Err(BadNumberingType::BadRegex(e)),
+                    Err(e) => Err(NlError::BadRegex(e)),
                 }
             }
         }
@@ -134,6 +138,7 @@ fn filter<T: BufRead>(
     input: &mut T,
     startnum: u32,
     numbering: &NumberingType,
+    width: u32,
 ) {
     let mut buf = String::with_capacity(1024);
     let mut num = startnum;
@@ -163,6 +168,34 @@ fn filter<T: BufRead>(
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum LineNumberFormat {
+    Ln,
+    Rn,
+    Rz,
+}
+
+impl LineNumberFormat {
+    fn from_opt(opt: &str) -> Result<Self, NlError> {
+        match opt {
+            "ln" => Ok(LineNumberFormat::Ln),
+            "rn" => Ok(LineNumberFormat::Rn),
+            "rz" => Ok(LineNumberFormat::Rz),
+            _ => Err(NlError::UnsupportedNumberingFormat(opt)),
+        }
+    }
+
+    fn format(self, line: u32, width: usize) -> String {
+        match self {
+            LineNumberFormat::Ln => format!("{:<width$}", line, width = width),
+            LineNumberFormat::Rn => format!("{:>width$}", line, width = width),
+            LineNumberFormat::Rz => {
+                format!("{:0>width$}", line, width = width)
+            }
+        }
+    }
+}
+
 lazy_static! {
     static ref NL: Program = Program::new("nl");
 }
@@ -188,18 +221,33 @@ fn main() {
         args.value_of("body-type").unwrap_or("t"),
     ) {
         Ok(t) => t,
-        Err(e) => NL.perror(&e),
+        Err(e) => NL.perror(e),
     };
 
     let startnum = value_t!(args.value_of("initial-value"), u32).unwrap_or(1);
 
+    // XSI: "The default *width* shall be 6"
+    let width = value_t!(args.value_of("width"), u32).unwrap_or(6);
+
+    // XSI: The default format shall be **rn**
+    let format = if args.is_present("format") {
+        match LineNumberFormat::from_opt(args.value_of("format").unwrap()) {
+            Ok(f) => f,
+            Err(e) => NL.perror(e),
+        }
+    } else {
+        LineNumberFormat::Rn
+    };
+
     let stdin = stdin();
     match args.value_of("file") {
         Some(f) => match File::open(f) {
-            Ok(f) => filter(&mut BufReader::new(f), startnum, &body_type),
+            Ok(f) => {
+                filter(&mut BufReader::new(f), startnum, &body_type, width)
+            }
             Err(e) => NL.perror(format!("{}: {}", f, e)),
         },
-        None => filter(&mut stdin.lock(), startnum, &body_type),
+        None => filter(&mut stdin.lock(), startnum, &body_type, width),
     }
 }
 
@@ -256,13 +304,60 @@ mod tests {
     fn it_recognizes_unsupported_numbering_types() {
         let t = NumberingType::from_opt("zzz");
         assert!(t.is_err());
-        assert_eq!(BadNumberingType::UnsupportedType("zzz"), t.unwrap_err());
+        assert_eq!(NlError::UnsupportedNumberingType("zzz"), t.unwrap_err());
     }
 
     #[test]
     fn it_recognizes_empty_regex() {
         let t = NumberingType::from_opt("p");
         assert!(t.is_err());
-        assert_eq!(BadNumberingType::EmptyRegex, t.unwrap_err());
+        assert_eq!(NlError::EmptyRegex, t.unwrap_err());
+    }
+
+    #[test]
+    fn it_can_left_align() {
+        let left_aligned = LineNumberFormat::Ln;
+        assert_eq!("1     ", left_aligned.format(1, 6));
+    }
+
+    #[test]
+    fn it_can_right_align() {
+        let right_aligned = LineNumberFormat::Rn;
+        assert_eq!("     1", right_aligned.format(1, 6));
+    }
+
+    #[test]
+    fn it_can_right_align_with_zeros() {
+        let right_aligned = LineNumberFormat::Rz;
+        assert_eq!("000001", right_aligned.format(1, 6));
+    }
+
+    #[test]
+    fn it_can_build_left_justified_variant() {
+        assert_eq!(
+            LineNumberFormat::from_opt("ln").unwrap(),
+            LineNumberFormat::Ln
+        );
+    }
+
+    #[test]
+    fn it_can_build_right_justified_variant() {
+        assert_eq!(
+            LineNumberFormat::from_opt("rn").unwrap(),
+            LineNumberFormat::Rn
+        );
+    }
+
+    #[test]
+    fn it_can_build_right_justified_leading_zeros_variant() {
+        assert_eq!(
+            LineNumberFormat::from_opt("rz").unwrap(),
+            LineNumberFormat::Rz
+        );
+    }
+
+    #[test]
+    fn its_an_error_to_give_bad_numbering_format() {
+        assert!(LineNumberFormat::from_opt("zz").is_err(),);
     }
 }
