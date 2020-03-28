@@ -71,18 +71,19 @@ use std::process::exit;
 
 static PROG_NAME: &'static str = "nl";
 
-#[derive(PartialEq, Debug)]
-enum NumberingType<'a> {
+#[derive(Debug)]
+enum NumberingType {
     All,
     NonEmpty,
     None,
-    Regex(&'a str),
+    Regex(Regex),
 }
 
 #[derive(PartialEq, Debug)]
 enum BadNumberingType<'a> {
     UnsupportedType(&'a str),
     EmptyRegex,
+    BadRegex(Error),
 }
 
 impl<'a> fmt::Display for BadNumberingType<'a> {
@@ -94,11 +95,14 @@ impl<'a> fmt::Display for BadNumberingType<'a> {
             BadNumberingType::EmptyRegex => {
                 write!(f, "body expr: empty (sub)expression --")
             }
+            BadNumberingType::BadRegex(e) => {
+                write!(f, "body expr: ill formed regex -- {}", e)
+            }
         }
     }
 }
 
-impl<'a> NumberingType<'a> {
+impl NumberingType {
     fn from_opt(s: &str) -> Result<NumberingType, BadNumberingType> {
         match s {
             "a" => Ok(NumberingType::All),
@@ -115,8 +119,11 @@ impl<'a> NumberingType<'a> {
                     return Err(BadNumberingType::EmptyRegex);
                 }
 
-                let (_p, regex) = s.split_at(1);
-                Ok(NumberingType::Regex(regex))
+                let (_p, re) = s.split_at(1);
+                match Regex::new(re) {
+                    Ok(re) => Ok(NumberingType::Regex(re)),
+                    Err(e) => Err(BadNumberingType::BadRegex(e)),
+                }
             }
         }
     }
@@ -157,7 +164,22 @@ fn perror<T: fmt::Display>(e: T) -> ! {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+
+    impl PartialEq for NumberingType {
+        fn eq(&self, other: &Self) -> bool {
+            match (self, other) {
+                (NumberingType::Regex(left), NumberingType::Regex(right)) => {
+                    left.as_str() == right.as_str()
+                }
+                (NumberingType::All, NumberingType::All) => true,
+                (NumberingType::None, NumberingType::None) => true,
+                (NumberingType::NonEmpty, NumberingType::NonEmpty) => true,
+                _ => false,
+            }
+        }
+    }
 
     #[test]
     fn it_can_build_numbering_type_all() {
@@ -184,7 +206,10 @@ mod tests {
     fn it_can_build_numbering_type_regex() {
         let t = NumberingType::from_opt("p^foobar");
         assert!(t.is_ok());
-        assert_eq!(NumberingType::Regex("^foobar"), t.unwrap());
+        assert_eq!(
+            NumberingType::Regex(Regex::new("^foobar").unwrap()),
+            t.unwrap()
+        );
     }
 
     #[test]
