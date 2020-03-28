@@ -208,7 +208,6 @@ fn perror<T: fmt::Display>(e: T) -> ! {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     impl PartialEq for NumberingType {
