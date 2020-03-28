@@ -149,7 +149,7 @@ impl LineNumberFormat {
         }
     }
 
-    fn format(self, line: u32, width: usize) -> String {
+    fn as_string(&self, line: u32, width: usize) -> String {
         match self {
             LineNumberFormat::Ln => format!("{:<width$}", line, width = width),
             LineNumberFormat::Rn => format!("{:>width$}", line, width = width),
@@ -175,7 +175,7 @@ struct Cli<'a> {
     increment: u32,
     startnum: u32,
     restart: bool,
-    width: u32,
+    width: usize,
 }
 
 impl<'a> Cli<'a> {
@@ -411,19 +411,19 @@ mod tests {
     #[test]
     fn it_can_left_align() {
         let left_aligned = LineNumberFormat::Ln;
-        assert_eq!("1     ", left_aligned.format(1, 6));
+        assert_eq!("1     ", left_aligned.as_string(1, 6));
     }
 
     #[test]
     fn it_can_right_align() {
         let right_aligned = LineNumberFormat::Rn;
-        assert_eq!("     1", right_aligned.format(1, 6));
+        assert_eq!("     1", right_aligned.as_string(1, 6));
     }
 
     #[test]
     fn it_can_right_align_with_zeros() {
         let right_aligned = LineNumberFormat::Rz;
-        assert_eq!("000001", right_aligned.format(1, 6));
+        assert_eq!("000001", right_aligned.as_string(1, 6));
     }
 
     #[test]
