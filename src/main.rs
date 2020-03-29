@@ -176,6 +176,23 @@ struct Cli<'a> {
     width: usize,
 }
 
+/// execute `$f` on `$var` and storing the result in `$cli`.
+/// do nothing if `$var` is `None`. `perror` if `$f(Some($var)).is_err()`
+macro_rules! store_arg {
+    ( $cli:ident, $var:ident, $f:expr ) => {
+        match $var {
+            Some(v) => match $f(v) {
+                Ok(v) => {
+                    $cli.$var = v;
+                    $cli
+                }
+                Err(e) => $cli.program.perror(e),
+            },
+            None => $cli,
+        }
+    };
+}
+
 impl<'a> Cli<'a> {
     fn new(program: &'static Program) -> Self {
         Cli {
@@ -199,16 +216,7 @@ impl<'a> Cli<'a> {
     }
 
     fn body(mut self, body: Option<&str>) -> Self {
-        match body {
-            Some(b) => match NumberingType::from_opt(b) {
-                Ok(b) => {
-                    self.body = b;
-                    self
-                }
-                Err(e) => NL.perror(e),
-            },
-            None => self,
-        }
+        store_arg!(self, body, NumberingType::from_opt)
     }
 
     // stub
@@ -217,42 +225,15 @@ impl<'a> Cli<'a> {
     }
 
     fn footer(mut self, footer: Option<&str>) -> Self {
-        match footer {
-            Some(b) => match NumberingType::from_opt(b) {
-                Ok(b) => {
-                    self.footer = b;
-                    self
-                }
-                Err(e) => NL.perror(e),
-            },
-            None => self,
-        }
+        store_arg!(self, footer, NumberingType::from_opt)
     }
 
     fn format(mut self, format: Option<&str>) -> Self {
-        match format {
-            Some(f) => match LineNumberFormat::from_opt(f) {
-                Ok(f) => {
-                    self.format = f;
-                    self
-                }
-                Err(e) => NL.perror(e),
-            },
-            None => self,
-        }
+        store_arg!(self, format, LineNumberFormat::from_opt)
     }
 
     fn header(mut self, header: Option<&str>) -> Self {
-        match header {
-            Some(b) => match NumberingType::from_opt(b) {
-                Ok(b) => {
-                    self.header = b;
-                    self
-                }
-                Err(e) => NL.perror(e),
-            },
-            None => self,
-        }
+        store_arg!(self, header, NumberingType::from_opt)
     }
 
     // stub
