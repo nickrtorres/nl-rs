@@ -70,7 +70,7 @@ use program::Program;
 use regex::{Error, Regex};
 use std::fmt;
 use std::fs::File;
-use std::io::{stdin, BufRead, BufReader};
+use std::io::{self, stdin, BufRead, BufReader};
 
 #[derive(Debug)]
 enum NumberingType {
@@ -256,18 +256,16 @@ impl<'a> Cli<'a> {
         self
     }
 
-    fn filter<T: BufRead>(self, mut input: T) {
+    fn filter<T: BufRead>(self, mut input: T) -> Result<(), io::Error> {
         let mut buf = String::with_capacity(1024);
         let mut num = self.startnum;
-        while let Ok(s) = input.read_line(&mut buf) {
-            if s == 0 {
-                return;
-            }
+        for line in input.lines() {
+            let line = line?;
 
             let donumber = match &self.body {
                 NumberingType::All => true,
-                NumberingType::NonEmpty => !(s == 1 && buf.starts_with("\n")),
-                NumberingType::Regex(re) => re.is_match(&buf),
+                NumberingType::NonEmpty => !(line.is_empty()),
+                NumberingType::Regex(re) => re.is_match(&line),
                 _ => false,
             };
 
@@ -275,14 +273,10 @@ impl<'a> Cli<'a> {
                 print!("{}", self.format.as_string(num, self.width));
             }
 
-            print!("\t{}", buf);
-
-            if donumber {
-                num += 1;
-            }
-
-            buf.clear();
+            println!("{}", line);
         }
+
+        Ok(())
     }
 }
 
@@ -315,12 +309,16 @@ fn main() {
         .width(args.value_of("width"));
 
     let stdin = stdin();
-    match args.value_of("file") {
+    let result = match args.value_of("file") {
         Some(f) => match File::open(f) {
             Ok(f) => cli.filter(&mut BufReader::new(f)),
             Err(e) => NL.perror(format!("{}: {}", f, e)),
         },
         None => cli.filter(&mut stdin.lock()),
+    };
+
+    if let Err(e) = result {
+        NL.perror(e);
     }
 }
 
