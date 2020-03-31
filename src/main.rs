@@ -67,7 +67,7 @@
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 use program::Program;
-use regex::{Error, Regex};
+use regex::{self, Regex};
 use std::fmt;
 use std::fs::File;
 use std::io::{self, stderr, stdin, stdout, BufRead, BufReader, Write};
@@ -83,7 +83,7 @@ enum NumberingType {
 
 #[derive(PartialEq, Debug)]
 enum NlError<'a> {
-    BadRegex(Error),
+    BadRegex(regex::Error),
     EmptyRegex,
     IllegalFormat(&'a str),
     IllegalNumberingType(&'a str),
