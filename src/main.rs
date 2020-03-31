@@ -70,7 +70,8 @@ use program::Program;
 use regex::{Error, Regex};
 use std::fmt;
 use std::fs::File;
-use std::io::{self, stdin, stdout, BufRead, BufReader, Write};
+use std::io::{self, stderr, stdin, stdout, BufRead, BufReader, Write};
+use std::process::exit;
 
 #[derive(Debug)]
 enum NumberingType {
@@ -299,22 +300,30 @@ fn main() {
         .arg(Arg::with_name("initial-value").short("v").takes_value(true))
         .arg(Arg::with_name("restart-at-page").short("p"))
         .arg(Arg::with_name("width").short("w").takes_value(true))
-        .get_matches();
+        .get_matches_safe();
+
+    let matches = match args {
+        Ok(m) => m,
+        Err(e) => {
+            let _ = write!(stderr(), "{}", e);
+            exit(0);
+        }
+    };
 
     let cli = Cli::new(&NL)
-        .blanks(args.value_of("blanks"))
-        .body(args.value_of("body-type"))
-        .delim(args.value_of("delim"))
-        .footer(args.value_of("footer-type"))
-        .format(args.value_of("format"))
-        .header(args.value_of("header-type"))
-        .increment(args.value_of("increment"))
-        .startnum(args.value_of("initial-value"))
-        .restart(args.value_of("restart-at-page"))
-        .width(args.value_of("width"));
+        .blanks(matches.value_of("blanks"))
+        .body(matches.value_of("body-type"))
+        .delim(matches.value_of("delim"))
+        .footer(matches.value_of("footer-type"))
+        .format(matches.value_of("format"))
+        .header(matches.value_of("header-type"))
+        .increment(matches.value_of("increment"))
+        .startnum(matches.value_of("initial-value"))
+        .restart(matches.value_of("restart-at-page"))
+        .width(matches.value_of("width"));
 
     let stdin = stdin();
-    let result = match args.value_of("file") {
+    let result = match matches.value_of("file") {
         Some(f) => match File::open(f) {
             Ok(f) => cli.filter(&mut BufReader::new(f)),
             Err(e) => NL.perror(format!("{}: {}", f, e)),
