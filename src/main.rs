@@ -241,9 +241,8 @@ impl<'a> Cli<'a> {
         store_arg!(self, increment, |s: &str| { s.parse::<u32>() })
     }
 
-    // stub
-    fn startnum(self, startnum: Option<&str>) -> Self {
-        self
+    fn startnum(mut self, startnum: Option<&str>) -> Self {
+        store_arg!(self, startnum, |s: &str| { s.parse::<u32>() })
     }
 
     // stub
