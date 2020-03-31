@@ -70,7 +70,7 @@ use program::Program;
 use regex::{Error, Regex};
 use std::fmt;
 use std::fs::File;
-use std::io::{self, stdin, BufRead, BufReader};
+use std::io::{self, stdin, stdout, BufRead, BufReader, Write};
 
 #[derive(Debug)]
 enum NumberingType {
@@ -270,11 +270,15 @@ impl<'a> Cli<'a> {
             };
 
             if donumber {
-                print!("{}", self.format.as_string(num, self.width));
+                write!(
+                    stdout(),
+                    "{}",
+                    self.format.as_string(num, self.width)
+                )?;
                 num += 1;
             }
 
-            println!("{}", line);
+            writeln!(stdout(), "{}", line)?;
         }
 
         Ok(())
