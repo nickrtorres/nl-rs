@@ -271,6 +271,7 @@ impl<'a> Cli<'a> {
 
             if donumber {
                 print!("{}", self.format.as_string(num, self.width));
+                num += 1;
             }
 
             println!("{}", line);
