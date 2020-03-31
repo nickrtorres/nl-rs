@@ -237,9 +237,8 @@ impl<'a> Cli<'a> {
         store_arg!(self, header, NumberingType::from_opt)
     }
 
-    // stub
-    fn increment(self, increment: Option<&str>) -> Self {
-        self
+    fn increment(mut self, increment: Option<&str>) -> Self {
+        store_arg!(self, increment, |s: &str| { s.parse::<u32>() })
     }
 
     // stub
@@ -276,7 +275,8 @@ impl<'a> Cli<'a> {
                     "{}",
                     self.format.as_string(num, self.width)
                 )?;
-                num += 1;
+
+                num += self.increment;
             }
 
             writeln!(stdout(), "{}", line)?;
