@@ -279,10 +279,7 @@ fn main() {
         }
     };
 
-    let cli = match Cli::new(&matches) {
-        Ok(cli) => cli,
-        Err(e) => NL.perror(e),
-    };
+    let cli = Cli::new(&matches).unwrap_or_else(|e| NL.perror(e));
 
     let stdin = stdin();
     let result = match matches.value_of("file") {
