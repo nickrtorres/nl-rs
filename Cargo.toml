@@ -1,5 +1,5 @@
 [package]
-name = "nl-rs"
+name = "nl_rs"
 version = "0.1.0"
 authors = ["Nick Torres <nickrtorres@icloud.com>"]
 edition = "2018"
