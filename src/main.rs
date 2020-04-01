@@ -87,6 +87,7 @@ enum NlError<'a> {
     EmptyRegex,
     IllegalFormat(&'a str),
     IllegalNumberingType(&'a str),
+    InvalidNumber,
 }
 
 impl<'a> fmt::Display for NlError<'a> {
@@ -102,6 +103,7 @@ impl<'a> fmt::Display for NlError<'a> {
                 write!(f, "illegal body line numbering type -- {}", t)
             }
             NlError::IllegalFormat(e) => write!(f, "illegal format -- {}", e),
+            NlError::InvalidNumber => write!(f, "invalid num argument"),
         }
     }
 }
@@ -198,7 +200,16 @@ impl<'a> Cli<'a> {
             None => LineNumberFormat::Rn,
         };
 
-        // TODO allow Box'd errors
+        // TODO allow Box'd errors to avoid map_err
+        let increment = match args.value_of("increment") {
+            Some(i) => i.parse::<u32>().map_err(|_| NlError::InvalidNumber)?,
+            None => 1,
+        };
+
+        let startnum = match args.value_of("initial-value") {
+            Some(i) => i.parse::<u32>().map_err(|_| NlError::InvalidNumber)?,
+            None => 1,
+        };
 
         Ok(Cli {
             blanks: 1,
@@ -207,8 +218,8 @@ impl<'a> Cli<'a> {
             footer,
             format,
             header,
-            startnum: 1,
-            increment: 1,
+            startnum,
+            increment,
             restart: true,
             width: 6,
         })
