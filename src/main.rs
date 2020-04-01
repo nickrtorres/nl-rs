@@ -64,7 +64,7 @@
 //
 //	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
 //	  All Rights Reserved
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 use lazy_static::lazy_static;
 use program::Program;
 use regex::{self, Regex};
@@ -164,7 +164,6 @@ lazy_static! {
 }
 
 struct Cli<'a> {
-    program: &'static Program,
     blanks: u32,
     body: NumberingType,
     delim: &'a str,
@@ -177,82 +176,42 @@ struct Cli<'a> {
     width: usize,
 }
 
-/// execute `$f` on `$var` and storing the result in `$cli`.
-/// do nothing if `$var` is `None`. `perror` if `$f(Some($var)).is_err()`
-macro_rules! store_arg {
-    ( $cli:ident, $var:ident, $f:expr ) => {
-        match $var {
-            Some(v) => match $f(v) {
-                Ok(v) => {
-                    $cli.$var = v;
-                    $cli
-                }
-                Err(e) => $cli.program.perror(e),
-            },
-            None => $cli,
-        }
-    };
-}
-
 impl<'a> Cli<'a> {
-    fn new(program: &'static Program) -> Self {
-        Cli {
-            program: program,
+    fn new(args: &'a ArgMatches) -> Result<Self, NlError<'a>> {
+        let body = match args.value_of("body") {
+            Some(b) => NumberingType::from_opt(b)?,
+            None => NumberingType::NonEmpty,
+        };
+
+        let header = match args.value_of("header-type") {
+            Some(h) => NumberingType::from_opt(h)?,
+            None => NumberingType::NonEmpty,
+        };
+
+        let footer = match args.value_of("footer-type") {
+            Some(f) => NumberingType::from_opt(f)?,
+            None => NumberingType::NonEmpty,
+        };
+
+        let format = match args.value_of("format") {
+            Some(f) => LineNumberFormat::from_opt(f)?,
+            None => LineNumberFormat::Rn,
+        };
+
+        // TODO allow Box'd errors
+
+        Ok(Cli {
             blanks: 1,
-            body: NumberingType::NonEmpty,
+            body,
             delim: "\\:",
-            footer: NumberingType::NonEmpty,
-            format: LineNumberFormat::Rn,
-            header: NumberingType::NonEmpty,
-            increment: 1,
+            footer,
+            format,
+            header,
             startnum: 1,
+            increment: 1,
             restart: true,
             width: 6,
-        }
-    }
-
-    // stub
-    fn blanks(self, blanks: Option<&str>) -> Self {
-        self
-    }
-
-    fn body(mut self, body: Option<&str>) -> Self {
-        store_arg!(self, body, NumberingType::from_opt)
-    }
-
-    // stub
-    fn delim(self, delim: Option<&str>) -> Self {
-        self
-    }
-
-    fn footer(mut self, footer: Option<&str>) -> Self {
-        store_arg!(self, footer, NumberingType::from_opt)
-    }
-
-    fn format(mut self, format: Option<&str>) -> Self {
-        store_arg!(self, format, LineNumberFormat::from_opt)
-    }
-
-    fn header(mut self, header: Option<&str>) -> Self {
-        store_arg!(self, header, NumberingType::from_opt)
-    }
-
-    fn increment(mut self, increment: Option<&str>) -> Self {
-        store_arg!(self, increment, |s: &str| { s.parse::<u32>() })
-    }
-
-    fn startnum(mut self, startnum: Option<&str>) -> Self {
-        store_arg!(self, startnum, |s: &str| { s.parse::<u32>() })
-    }
-
-    // stub
-    fn restart(self, startnum: Option<&str>) -> Self {
-        self
-    }
-
-    // stub
-    fn width(self, width: Option<&str>) -> Self {
-        self
+        })
     }
 
     fn filter<T: BufRead>(self, mut input: T) -> Result<(), io::Error> {
@@ -309,17 +268,8 @@ fn main() {
         }
     };
 
-    let cli = Cli::new(&NL)
-        .blanks(matches.value_of("blanks"))
-        .body(matches.value_of("body-type"))
-        .delim(matches.value_of("delim"))
-        .footer(matches.value_of("footer-type"))
-        .format(matches.value_of("format"))
-        .header(matches.value_of("header-type"))
-        .increment(matches.value_of("increment"))
-        .startnum(matches.value_of("initial-value"))
-        .restart(matches.value_of("restart-at-page"))
-        .width(matches.value_of("width"));
+    // TODO handle error
+    let cli = Cli::new(&matches).unwrap();
 
     let stdin = stdin();
     let result = match matches.value_of("file") {
