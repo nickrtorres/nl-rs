@@ -88,9 +88,13 @@ impl NumberingType {
 }
 
 #[derive(Debug, PartialEq)]
+/// Variants for how the numbers on a numbered line are formatted
 enum LineNumberFormat {
+    /// Left aligned without leading zeros
     Ln,
+    /// Right aligned without leading zeros
     Rn,
+    /// Right aligned with leading zeros
     Rz,
 }
 
