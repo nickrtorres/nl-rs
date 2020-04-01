@@ -105,13 +105,10 @@ fn main() {
         .arg(Arg::with_name("width").short("w").takes_value(true))
         .get_matches_safe();
 
-    let matches = match args {
-        Ok(m) => m,
-        Err(e) => {
-            let _ = write!(stderr(), "{}", e);
-            exit(0);
-        }
-    };
+    let matches = args.unwrap_or_else(|e| {
+        let _ = write!(stderr(), "{}", e);
+        exit(0);
+    });
 
     let cli = Cli::new(&matches).unwrap_or_else(|e| NL.perror(e));
 
