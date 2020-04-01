@@ -68,9 +68,11 @@ use clap::{App, Arg, ArgMatches};
 use lazy_static::lazy_static;
 use program::Program;
 use regex::{self, Regex};
+use std::error;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, stderr, stdin, stdout, BufRead, BufReader, Write};
+use std::num;
 use std::process::exit;
 
 #[derive(Debug)]
@@ -90,6 +92,8 @@ enum NlError<'a> {
     InvalidNumber,
 }
 
+impl<'a> error::Error for NlError<'a> {}
+
 impl<'a> fmt::Display for NlError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -105,6 +109,12 @@ impl<'a> fmt::Display for NlError<'a> {
             NlError::IllegalFormat(e) => write!(f, "illegal format -- {}", e),
             NlError::InvalidNumber => write!(f, "invalid num argument"),
         }
+    }
+}
+
+impl<'a> From<num::ParseIntError> for NlError<'a> {
+    fn from(err: num::ParseIntError) -> NlError<'a> {
+        NlError::InvalidNumber
     }
 }
 
@@ -202,12 +212,12 @@ impl<'a> Cli<'a> {
 
         // TODO allow Box'd errors to avoid map_err
         let increment = match args.value_of("increment") {
-            Some(i) => i.parse::<u32>().map_err(|_| NlError::InvalidNumber)?,
+            Some(i) => i.parse::<u32>()?,
             None => 1,
         };
 
         let startnum = match args.value_of("initial-value") {
-            Some(i) => i.parse::<u32>().map_err(|_| NlError::InvalidNumber)?,
+            Some(i) => i.parse::<u32>()?,
             None => 1,
         };
 
