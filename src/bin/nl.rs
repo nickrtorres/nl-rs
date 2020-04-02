@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic, clippy::nursery)]
+#![deny(warnings)]
+#![allow(dead_code)]
 // This implementation references (1) apple's and (2) illumos's. As such, both
 // copyrights are provided below for brevity:
 //
@@ -78,7 +81,7 @@ lazy_static! {
 }
 
 fn try_main<'a>(args: &'a ArgMatches) -> Result<(), NlError<'a>> {
-    Cli::new(&args).and_then(|cli| cli.filter())
+    Cli::new(args).and_then(Cli::filter)
 }
 
 fn main() {

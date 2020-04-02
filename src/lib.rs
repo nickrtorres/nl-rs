@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic, clippy::nursery)]
+#![deny(warnings)]
+#![allow(dead_code)]
+
 use clap::ArgMatches;
 use regex::{self, Regex};
 use std::error;
@@ -72,25 +76,25 @@ enum NumberingType {
 }
 
 impl NumberingType {
-    fn from_opt(s: Option<&str>) -> Result<NumberingType, NlError> {
+    fn from_opt(s: Option<&str>) -> Result<Self, NlError> {
         match s {
-            None | Some("t") => Ok(NumberingType::NonEmpty),
-            Some("a") => Ok(NumberingType::All),
-            Some("n") => Ok(NumberingType::None),
+            None | Some("t") => Ok(Self::NonEmpty),
+            Some("a") => Ok(Self::All),
+            Some("n") => Ok(Self::None),
             Some(s) => {
                 // if we're here we were either given an unsupported
                 // numbering type or 'p' with a regex
-                if !s.starts_with("p") {
+                if !s.starts_with('p') {
                     return Err(NlError::IllegalNumberingType(s));
                 }
 
-                if !(s.len() > 1) {
+                if s.len() <= 1 {
                     return Err(NlError::EmptyRegex);
                 }
 
                 let (_p, re) = s.split_at(1);
                 match Regex::new(re) {
-                    Ok(re) => Ok(NumberingType::Regex(re)),
+                    Ok(re) => Ok(Self::Regex(re)),
                     Err(e) => Err(NlError::BadRegex(e)),
                 }
             }
@@ -110,22 +114,22 @@ enum LineNumberFormat {
 }
 
 impl LineNumberFormat {
-    fn from_opt<'a>(opt: Option<&'a str>) -> Result<Self, NlError<'a>> {
+    fn from_opt(opt: Option<&str>) -> Result<Self, NlError<'_>> {
         match opt {
-            None | Some("rn") => Ok(LineNumberFormat::Rn),
-            Some("ln") => Ok(LineNumberFormat::Ln),
-            Some("rz") => Ok(LineNumberFormat::Rz),
+            None | Some("rn") => Ok(Self::Rn),
+            Some("ln") => Ok(Self::Ln),
+            Some("rz") => Ok(Self::Rz),
             Some(s) => Err(NlError::IllegalFormat(s)),
         }
     }
 
     fn as_string(&self, num: Option<u32>, width: usize) -> String {
         // TODO can num be &str ?
-        let num = num.map(|n| n.to_string()).unwrap_or(" ".to_string());
+        let num = num.map_or_else(|| " ".to_string(), |n| n.to_string());
         match self {
-            LineNumberFormat::Ln => format!("{:<width$}", num, width = width),
-            LineNumberFormat::Rn => format!("{:>width$}", num, width = width),
-            LineNumberFormat::Rz => format!("{:0>width$}", num, width = width),
+            Self::Ln => format!("{:<width$}", num, width = width),
+            Self::Rn => format!("{:>width$}", num, width = width),
+            Self::Rz => format!("{:0>width$}", num, width = width),
         }
     }
 }
@@ -154,7 +158,7 @@ fn parse_str_or<F: FromStr>(
     s: Option<&str>,
     default: F,
 ) -> Result<F, <F as FromStr>::Err> {
-    s.map_or(Ok(default), |s| s.parse::<F>())
+    s.map_or(Ok(default), str::parse)
 }
 
 impl<'a> Cli<'a> {
@@ -163,6 +167,12 @@ impl<'a> Cli<'a> {
     /// etc.). In anycase, we need to deterministically evaluate what the user provides and store it
     /// when it's valid, propogate an error when it's invalid, or default to a well-defined value when
     /// it's absent.
+    ///
+    /// # Errors
+    /// `Cli::new` will return on error if:
+    /// (1) a numeric option is specified and a non-numeric value is given
+    /// (2) a non-canonical numbering type is given
+    /// (3) a non-canonical numbering format is given
     pub fn new(args: &'a ArgMatches) -> Result<Self, NlError<'a>> {
         let body = NumberingType::from_opt(args.value_of("body-type"))?;
 
@@ -206,6 +216,11 @@ impl<'a> Cli<'a> {
 
     /// Output a file to `stdout` annotated with numbering in the style specified by
     /// the user through command line flags.
+    /// # Errors
+    /// Filter can fail on numerous `io::Error`s (e.g. unable to open a file, unable to read lines
+    /// from a file, etc.),
+    ///
+    /// All io errors are converted to `NlError`s that wrap the outstanding `io::Error`
     pub fn filter(self) -> Result<(), NlError<'a>> {
         let stdin = stdin();
         match self.file {
@@ -225,10 +240,10 @@ impl<'a> Cli<'a> {
             let n = match &self.body {
                 NumberingType::All => Some(num),
                 NumberingType::NonEmpty => {
-                    if !(line.is_empty()) {
-                        Some(num)
-                    } else {
+                    if line.is_empty() {
                         None
+                    } else {
+                        Some(num)
                     }
                 }
                 NumberingType::Regex(re) => {
@@ -249,7 +264,7 @@ impl<'a> Cli<'a> {
             )?;
 
             if n.is_some() {
-                num = num + self.increment;
+                num += self.increment;
             }
         }
 
