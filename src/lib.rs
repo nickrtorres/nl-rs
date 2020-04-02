@@ -237,11 +237,20 @@ impl<'a> Cli<'a> {
 
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
         let mut num = self.startnum;
+        let mut adj = 1;
         for line in input.lines() {
             let line = line?;
             // :( I don't like this and will have to repeat it for header and footer! Abstraction!
             let n = match &self.body {
-                NumberingType::All => Some(num),
+                NumberingType::All => {
+                    if line.is_empty() && adj < self.blanks {
+                        adj += 1;
+                        None
+                    } else {
+                        adj = 1;
+                        Some(num)
+                    }
+                }
                 NumberingType::NonEmpty => {
                     if line.is_empty() {
                         None

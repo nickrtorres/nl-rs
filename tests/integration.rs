@@ -168,4 +168,30 @@ mod integration {
             String::from_utf8(expected.stdout).unwrap()
         );
     }
+
+    #[test]
+    fn it_aware_of_adjacent_blank_line_rules() {
+        let expected = Command::new("/usr/bin/nl")
+            .arg("-b")
+            .arg("a")
+            .arg("-l")
+            .arg("2")
+            .arg("./tests/blanks.txt")
+            .output()
+            .expect("Could not execute /usr/bin/nl");
+
+        let actual = Command::new("./target/debug/nl")
+            .arg("-b")
+            .arg("a")
+            .arg("-l")
+            .arg("2")
+            .arg("./tests/blanks.txt")
+            .output()
+            .expect("Could not execute ./target/debug/nl-rs");
+
+        assert_eq!(
+            String::from_utf8(actual.stdout).unwrap(),
+            String::from_utf8(expected.stdout).unwrap()
+        );
+    }
 }
