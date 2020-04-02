@@ -119,7 +119,9 @@ impl LineNumberFormat {
         }
     }
 
-    fn as_string(&self, num: u32, width: usize) -> String {
+    fn as_string(&self, num: Option<u32>, width: usize) -> String {
+        // TODO can num be &str ?
+        let num = num.map(|n| n.to_string()).unwrap_or(" ".to_string());
         match self {
             LineNumberFormat::Ln => format!("{:<width$}", num, width = width),
             LineNumberFormat::Rn => format!("{:>width$}", num, width = width),
@@ -185,10 +187,12 @@ impl<'a> Cli<'a> {
 
         let restart = args.is_present("restart");
 
+        let delim = args.value_of("delim").unwrap_or("\\:");
+
         Ok(Cli {
-            blanks: 1,
+            blanks,
             body,
-            delim: "\\:",
+            delim,
             footer,
             format,
             header,
@@ -217,25 +221,36 @@ impl<'a> Cli<'a> {
         let mut num = self.startnum;
         for line in input.lines() {
             let line = line?;
-
-            let donumber = match &self.body {
-                NumberingType::All => true,
-                NumberingType::NonEmpty => !(line.is_empty()),
-                NumberingType::Regex(re) => re.is_match(&line),
-                _ => false,
+            // :( I don't like this and will have to repeat it for header and footer! Abstraction!
+            let n = match &self.body {
+                NumberingType::All => Some(num),
+                NumberingType::NonEmpty => {
+                    if !(line.is_empty()) {
+                        Some(num)
+                    } else {
+                        None
+                    }
+                }
+                NumberingType::Regex(re) => {
+                    if re.is_match(&line) {
+                        Some(num)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
             };
 
-            if donumber {
-                write!(
-                    stdout(),
-                    "{}",
-                    self.format.as_string(num, self.width)
-                )?;
+            writeln!(
+                stdout(),
+                "{}\t{}",
+                self.format.as_string(n, self.width),
+                line
+            )?;
 
-                num += self.increment;
+            if n.is_some() {
+                num = num + self.increment;
             }
-
-            writeln!(stdout(), "{}", line)?;
         }
 
         Ok(())
@@ -286,28 +301,28 @@ mod tests {
 
     #[test]
     fn it_can_build_numbering_type_all() {
-        let t = NumberingType::from_opt("a");
+        let t = NumberingType::from_opt(Some("a"));
         assert!(t.is_ok());
         assert_eq!(NumberingType::All, t.unwrap());
     }
 
     #[test]
     fn it_can_build_numbering_type_non_empty() {
-        let t = NumberingType::from_opt("t");
+        let t = NumberingType::from_opt(Some("t"));
         assert!(t.is_ok());
         assert_eq!(NumberingType::NonEmpty, t.unwrap());
     }
 
     #[test]
     fn it_can_build_numbering_type_none() {
-        let t = NumberingType::from_opt("n");
+        let t = NumberingType::from_opt(Some("n"));
         assert!(t.is_ok());
         assert_eq!(NumberingType::None, t.unwrap());
     }
 
     #[test]
     fn it_can_build_numbering_type_regex() {
-        let t = NumberingType::from_opt("p^foobar");
+        let t = NumberingType::from_opt(Some("p^foobar"));
         assert!(t.is_ok());
         assert_eq!(
             NumberingType::Regex(Regex::new("^foobar").unwrap()),
@@ -317,14 +332,14 @@ mod tests {
 
     #[test]
     fn it_recognizes_unsupported_numbering_types() {
-        let t = NumberingType::from_opt("zzz");
+        let t = NumberingType::from_opt(Some("zzz"));
         assert!(t.is_err());
         assert_eq!(NlError::IllegalNumberingType("zzz"), t.unwrap_err());
     }
 
     #[test]
     fn it_recognizes_empty_regex() {
-        let t = NumberingType::from_opt("p");
+        let t = NumberingType::from_opt(Some("p"));
         assert!(t.is_err());
         assert_eq!(NlError::EmptyRegex, t.unwrap_err());
     }
@@ -332,25 +347,25 @@ mod tests {
     #[test]
     fn it_can_left_align() {
         let left_aligned = LineNumberFormat::Ln;
-        assert_eq!("1     ", left_aligned.as_string(1, 6));
+        assert_eq!("1     ", left_aligned.as_string(Some(1), 6));
     }
 
     #[test]
     fn it_can_right_align() {
         let right_aligned = LineNumberFormat::Rn;
-        assert_eq!("     1", right_aligned.as_string(1, 6));
+        assert_eq!("     1", right_aligned.as_string(Some(1), 6));
     }
 
     #[test]
     fn it_can_right_align_with_zeros() {
         let right_aligned = LineNumberFormat::Rz;
-        assert_eq!("000001", right_aligned.as_string(1, 6));
+        assert_eq!("000001", right_aligned.as_string(Some(1), 6));
     }
 
     #[test]
     fn it_can_build_left_justified_variant() {
         assert_eq!(
-            LineNumberFormat::from_opt("ln").unwrap(),
+            LineNumberFormat::from_opt(Some("ln")).unwrap(),
             LineNumberFormat::Ln
         );
     }
@@ -358,7 +373,7 @@ mod tests {
     #[test]
     fn it_can_build_right_justified_variant() {
         assert_eq!(
-            LineNumberFormat::from_opt("rn").unwrap(),
+            LineNumberFormat::from_opt(Some("rn")).unwrap(),
             LineNumberFormat::Rn
         );
     }
@@ -366,13 +381,13 @@ mod tests {
     #[test]
     fn it_can_build_right_justified_leading_zeros_variant() {
         assert_eq!(
-            LineNumberFormat::from_opt("rz").unwrap(),
+            LineNumberFormat::from_opt(Some("rz")).unwrap(),
             LineNumberFormat::Rz
         );
     }
 
     #[test]
     fn its_an_error_to_give_bad_numbering_format() {
-        assert!(LineNumberFormat::from_opt("zz").is_err(),);
+        assert!(LineNumberFormat::from_opt(Some("zz")).is_err(),);
     }
 }
