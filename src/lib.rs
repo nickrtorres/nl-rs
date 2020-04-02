@@ -79,12 +79,12 @@ enum NumberingType {
 }
 
 impl NumberingType {
-    fn from_opt(s: Option<&str>) -> Result<Self> {
+    fn from_opt(s: &str) -> Result<Self> {
         match s {
-            None | Some("t") => Ok(Self::NonEmpty),
-            Some("a") => Ok(Self::All),
-            Some("n") => Ok(Self::None),
-            Some(s) => {
+            "t" => Ok(Self::NonEmpty),
+            "a" => Ok(Self::All),
+            "n" => Ok(Self::None),
+            s => {
                 // if we're here we were either given an unsupported
                 // numbering type or 'p' with a regex
                 if !s.starts_with('p') {
@@ -152,7 +152,7 @@ pub struct Cli<'a> {
     header: NumberingType,
     increment: u32,
     startnum: u32,
-    restart: bool,
+    norestart: bool,
     width: usize,
     file: FileType<'a>,
 }
@@ -177,11 +177,17 @@ impl<'a> Cli<'a> {
     /// (2) a non-canonical numbering type is given
     /// (3) a non-canonical numbering format is given
     pub fn new(args: &'a ArgMatches) -> Result<'a, Self> {
-        let body = NumberingType::from_opt(args.value_of("body-type"))?;
+        let body = args
+            .value_of("body-type")
+            .map_or(Ok(NumberingType::NonEmpty), NumberingType::from_opt)?;
 
-        let header = NumberingType::from_opt(args.value_of("header-type"))?;
+        let header = args
+            .value_of("header-type")
+            .map_or(Ok(NumberingType::None), NumberingType::from_opt)?;
 
-        let footer = NumberingType::from_opt(args.value_of("footer-type"))?;
+        let footer = args
+            .value_of("footer-type")
+            .map_or(Ok(NumberingType::None), NumberingType::from_opt)?;
 
         let format = LineNumberFormat::from_opt(args.value_of("format"))?;
 
@@ -198,7 +204,7 @@ impl<'a> Cli<'a> {
             None => FileType::Stdin,
         };
 
-        let restart = args.is_present("restart");
+        let norestart = args.is_present("restart");
 
         let delim = args.value_of("delim").unwrap_or("\\:");
 
@@ -211,7 +217,7 @@ impl<'a> Cli<'a> {
             header,
             startnum,
             increment,
-            restart,
+            norestart,
             width,
             file,
         })
@@ -236,12 +242,33 @@ impl<'a> Cli<'a> {
     }
 
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
-        let mut num = self.startnum;
         let mut adj = 1;
+        let mut current_numbering = &self.body;
+        let mut num = self.startnum;
         for line in input.lines() {
             let line = line?;
+            match &*line {
+                "\\:\\:\\:" => {
+                    if !self.norestart {
+                        num = self.startnum;
+                    }
+
+                    current_numbering = &self.header;
+                    continue;
+                }
+                "\\:\\:" => {
+                    current_numbering = &self.body;
+                    continue;
+                }
+                "\\:" => {
+                    current_numbering = &self.footer;
+                    continue;
+                }
+                _ => {}
+            };
+
             // :( I don't like this and will have to repeat it for header and footer! Abstraction!
-            let n = match &self.body {
+            let n = match &current_numbering {
                 NumberingType::All => {
                     if line.is_empty() && adj < self.blanks {
                         adj += 1;
@@ -328,28 +355,28 @@ mod tests {
 
     #[test]
     fn it_can_build_numbering_type_all() {
-        let t = NumberingType::from_opt(Some("a"));
+        let t = NumberingType::from_opt("a");
         assert!(t.is_ok());
         assert_eq!(NumberingType::All, t.unwrap());
     }
 
     #[test]
     fn it_can_build_numbering_type_non_empty() {
-        let t = NumberingType::from_opt(Some("t"));
+        let t = NumberingType::from_opt("t");
         assert!(t.is_ok());
         assert_eq!(NumberingType::NonEmpty, t.unwrap());
     }
 
     #[test]
     fn it_can_build_numbering_type_none() {
-        let t = NumberingType::from_opt(Some("n"));
+        let t = NumberingType::from_opt("n");
         assert!(t.is_ok());
         assert_eq!(NumberingType::None, t.unwrap());
     }
 
     #[test]
     fn it_can_build_numbering_type_regex() {
-        let t = NumberingType::from_opt(Some("p^foobar"));
+        let t = NumberingType::from_opt("p^foobar");
         assert!(t.is_ok());
         assert_eq!(
             NumberingType::Regex(Regex::new("^foobar").unwrap()),
@@ -359,14 +386,14 @@ mod tests {
 
     #[test]
     fn it_recognizes_unsupported_numbering_types() {
-        let t = NumberingType::from_opt(Some("zzz"));
+        let t = NumberingType::from_opt("zzz");
         assert!(t.is_err());
         assert_eq!(NlError::IllegalNumberingType("zzz"), t.unwrap_err());
     }
 
     #[test]
     fn it_recognizes_empty_regex() {
-        let t = NumberingType::from_opt(Some("p"));
+        let t = NumberingType::from_opt("p");
         assert!(t.is_err());
         assert_eq!(NlError::EmptyRegex, t.unwrap_err());
     }

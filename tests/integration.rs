@@ -194,4 +194,26 @@ mod integration {
             String::from_utf8(expected.stdout).unwrap()
         );
     }
+
+    #[test]
+    fn it_can_number_pages_discretely() {
+        let expected = Command::new("/usr/bin/nl")
+            .arg("-f")
+            .arg("a")
+            .arg("./tests/pages.txt")
+            .output()
+            .expect("Could not execute /usr/bin/nl");
+
+        let actual = Command::new("./target/debug/nl")
+            .arg("-f")
+            .arg("a")
+            .arg("./tests/pages.txt")
+            .output()
+            .expect("Could not execute ./target/debug/nl-rs");
+
+        assert_eq!(
+            String::from_utf8(actual.stdout).unwrap(),
+            String::from_utf8(expected.stdout).unwrap()
+        );
+    }
 }
