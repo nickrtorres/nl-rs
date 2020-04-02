@@ -1,14 +1,15 @@
 #![warn(clippy::pedantic, clippy::nursery)]
-#![deny(warnings)]
-#![allow(dead_code)]
 
 use clap::ArgMatches;
+use lazy_static::lazy_static;
 use regex::{self, Regex};
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, stdin, stdout, BufRead, BufReader, Write};
 use std::num;
+use std::ptr;
 use std::result;
 use std::str::FromStr;
 
@@ -66,7 +67,7 @@ impl<'a> From<io::Error> for NlError<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum NumberingType {
     /// Number everyline for the given file
     All,
@@ -241,33 +242,74 @@ impl<'a> Cli<'a> {
         }
     }
 
+    /// Gets the appropriate section transition based on the given line
+    ///
+    /// If `line` contains `delim`, determine if it's `delim` for footer, body,
+    /// or header by executing a FSM.
+    ///
+    /// # Returns
+    /// `None` if a section transition is unneeded
+    /// `Some(type)` if a tranisition is needed, where type is the new current numbering
+    /// type
+    fn section<'s>(
+        line: &str,
+        header: &'s NumberingType,
+        footer: &'s NumberingType,
+        body: &'s NumberingType,
+    ) -> Option<&'s NumberingType> {
+        lazy_static! {
+            static ref STATES: HashMap<usize, char> = {
+                let mut m = HashMap::new();
+                m.insert(0, '\\');
+                m.insert(1, ':');
+                m.insert(2, '\\');
+                m.insert(3, ':');
+                m.insert(4, '\\');
+                m.insert(5, ':');
+                m
+            };
+        }
+
+        let mut types: HashMap<usize, &'s NumberingType> = {
+            let mut m = HashMap::new();
+            m.insert(2usize, body);
+            m.insert(4usize, footer);
+            m.insert(6usize, header);
+            m
+        };
+
+        let mut state: usize = 0;
+        for c in line.chars() {
+            if c == STATES[&state] {
+                state += 1
+            } else {
+                break;
+            }
+        }
+
+        assert!(state <= 6);
+        types.remove(&state)
+    }
+
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
         let mut adj = 1;
         let mut current_numbering = &self.body;
         let mut num = self.startnum;
         for line in input.lines() {
             let line = line?;
-            match &*line {
-                "\\:\\:\\:" => {
-                    if !self.norestart {
-                        num = self.startnum;
-                    }
 
-                    current_numbering = &self.header;
-                    continue;
+            if let Some(s) =
+                Cli::section(&line, &self.header, &self.footer, &self.body)
+            {
+                if ptr::eq(s, &self.header) && !self.norestart {
+                    num = self.startnum;
                 }
-                "\\:\\:" => {
-                    current_numbering = &self.body;
-                    continue;
-                }
-                "\\:" => {
-                    current_numbering = &self.footer;
-                    continue;
-                }
-                _ => {}
+
+                current_numbering = s;
+                continue;
             };
 
-            // :( I don't like this and will have to repeat it for header and footer! Abstraction!
+            // :(
             let n = match &current_numbering {
                 NumberingType::All => {
                     if line.is_empty() && adj < self.blanks {
@@ -443,5 +485,60 @@ mod tests {
     #[test]
     fn its_an_error_to_give_bad_numbering_format() {
         assert!(LineNumberFormat::from_opt(Some("zz")).is_err(),);
+    }
+
+    #[test]
+    fn it_can_determine_its_section_non_delim() {
+        assert_eq!(
+            None,
+            Cli::section(
+                "foobar",
+                &NumberingType::None,
+                &NumberingType::None,
+                &NumberingType::None
+            )
+        );
+    }
+
+    #[test]
+    fn it_can_determine_its_section_header() {
+        let header = NumberingType::NonEmpty;
+        assert_eq!(
+            Some(&header),
+            Cli::section(
+                "\\:\\:\\:",
+                &header,
+                &NumberingType::None,
+                &NumberingType::None
+            )
+        );
+    }
+
+    #[test]
+    fn it_can_determine_its_section_footer() {
+        let footer = NumberingType::NonEmpty;
+        assert_eq!(
+            Some(&footer),
+            Cli::section(
+                "\\:\\:",
+                &NumberingType::None,
+                &footer,
+                &NumberingType::None
+            )
+        );
+    }
+
+    #[test]
+    fn it_can_determine_its_section_body() {
+        let body = NumberingType::NonEmpty;
+        assert_eq!(
+            Some(&body),
+            Cli::section(
+                "\\:",
+                &NumberingType::None,
+                &NumberingType::None,
+                &body,
+            )
+        );
     }
 }
