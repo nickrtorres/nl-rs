@@ -67,14 +67,14 @@
 //
 //	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
 //	  All Rights Reserved
+extern crate nl_rs;
+
 use clap::{self, App, Arg, ArgMatches};
 use lazy_static::lazy_static;
+use nl_rs::{Cli, NlError};
 use program::Program;
 use std::io::{stderr, Write};
 use std::process::exit;
-
-extern crate nl_rs;
-use nl_rs::{Cli, NlError};
 
 lazy_static! {
     static ref NL: Program = Program::new("nl");
