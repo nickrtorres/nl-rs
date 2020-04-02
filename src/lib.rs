@@ -2,10 +2,12 @@ use clap::ArgMatches;
 use regex::{self, Regex};
 use std::error;
 use std::fmt;
-use std::io::{self, stdout, BufRead, Write};
+use std::fs::File;
+use std::io::{self, stdin, stdout, BufRead, BufReader, Write};
 use std::num;
+use std::str::FromStr;
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 /// Variants for what can go wrong when running `nl(1)`
 pub enum NlError<'a> {
     /// `Regex::new(Regex)` failed. This is likely do to an invalid Regex
@@ -20,6 +22,8 @@ pub enum NlError<'a> {
     /// An option that required an integer was specified, but a non-integral type was given as the
     /// parameter
     InvalidNumber,
+    /// An I/O error occured while running the program
+    IoError(io::Error),
 }
 
 impl<'a> error::Error for NlError<'a> {}
@@ -38,6 +42,7 @@ impl<'a> fmt::Display for NlError<'a> {
             }
             NlError::IllegalFormat(e) => write!(f, "illegal format -- {}", e),
             NlError::InvalidNumber => write!(f, "invalid num argument"),
+            NlError::IoError(e) => write!(f, "{}", e.to_string()),
         }
     }
 }
@@ -45,6 +50,12 @@ impl<'a> fmt::Display for NlError<'a> {
 impl<'a> From<num::ParseIntError> for NlError<'a> {
     fn from(_err: num::ParseIntError) -> NlError<'a> {
         NlError::InvalidNumber
+    }
+}
+
+impl<'a> From<io::Error> for NlError<'a> {
+    fn from(err: io::Error) -> NlError<'a> {
+        NlError::IoError(err)
     }
 }
 
@@ -61,12 +72,12 @@ enum NumberingType {
 }
 
 impl NumberingType {
-    fn from_opt(s: &str) -> Result<NumberingType, NlError> {
+    fn from_opt(s: Option<&str>) -> Result<NumberingType, NlError> {
         match s {
-            "a" => Ok(NumberingType::All),
-            "t" => Ok(NumberingType::NonEmpty),
-            "n" => Ok(NumberingType::None),
-            _ => {
+            None | Some("t") => Ok(NumberingType::NonEmpty),
+            Some("a") => Ok(NumberingType::All),
+            Some("n") => Ok(NumberingType::None),
+            Some(s) => {
                 // if we're here we were either given an unsupported
                 // numbering type or 'p' with a regex
                 if !s.starts_with("p") {
@@ -92,19 +103,19 @@ impl NumberingType {
 enum LineNumberFormat {
     /// Left aligned without leading zeros
     Ln,
-    /// Right aligned without leading zeros
+    /// Right aligned without leading zeros (Default)
     Rn,
     /// Right aligned with leading zeros
     Rz,
 }
 
 impl LineNumberFormat {
-    fn from_opt(opt: &str) -> Result<Self, NlError> {
+    fn from_opt<'a>(opt: Option<&'a str>) -> Result<Self, NlError<'a>> {
         match opt {
-            "ln" => Ok(LineNumberFormat::Ln),
-            "rn" => Ok(LineNumberFormat::Rn),
-            "rz" => Ok(LineNumberFormat::Rz),
-            _ => Err(NlError::IllegalFormat(opt)),
+            None | Some("rn") => Ok(LineNumberFormat::Rn),
+            Some("ln") => Ok(LineNumberFormat::Ln),
+            Some("rz") => Ok(LineNumberFormat::Rz),
+            Some(s) => Err(NlError::IllegalFormat(s)),
         }
     }
 
@@ -115,6 +126,11 @@ impl LineNumberFormat {
             LineNumberFormat::Rz => format!("{:0>width$}", num, width = width),
         }
     }
+}
+
+enum FileType<'a> {
+    File(&'a str),
+    Stdin,
 }
 
 /// An opaque structure to store command line options specified by the user.
@@ -129,6 +145,14 @@ pub struct Cli<'a> {
     startnum: u32,
     restart: bool,
     width: usize,
+    file: FileType<'a>,
+}
+
+fn parse_str_or<F: FromStr>(
+    s: Option<&str>,
+    default: F,
+) -> Result<F, <F as FromStr>::Err> {
+    s.map_or(Ok(default), |s| s.parse::<F>())
 }
 
 impl<'a> Cli<'a> {
@@ -138,35 +162,28 @@ impl<'a> Cli<'a> {
     /// when it's valid, propogate an error when it's invalid, or default to a well-defined value when
     /// it's absent.
     pub fn new(args: &'a ArgMatches) -> Result<Self, NlError<'a>> {
-        let body = match args.value_of("body") {
-            Some(b) => NumberingType::from_opt(b)?,
-            None => NumberingType::NonEmpty,
+        let body = NumberingType::from_opt(args.value_of("body-type"))?;
+
+        let header = NumberingType::from_opt(args.value_of("header-type"))?;
+
+        let footer = NumberingType::from_opt(args.value_of("footer-type"))?;
+
+        let format = LineNumberFormat::from_opt(args.value_of("format"))?;
+
+        let blanks = parse_str_or(args.value_of("blanks"), 1)?;
+
+        let startnum = parse_str_or(args.value_of("initial-value"), 1)?;
+
+        let increment = parse_str_or(args.value_of("increment"), 1)?;
+
+        let width = parse_str_or(args.value_of("width"), 6)?;
+
+        let file = match args.value_of("file") {
+            Some(f) => FileType::File(f),
+            None => FileType::Stdin,
         };
 
-        let header = match args.value_of("header-type") {
-            Some(h) => NumberingType::from_opt(h)?,
-            None => NumberingType::NonEmpty,
-        };
-
-        let footer = match args.value_of("footer-type") {
-            Some(f) => NumberingType::from_opt(f)?,
-            None => NumberingType::NonEmpty,
-        };
-
-        let format = match args.value_of("format") {
-            Some(f) => LineNumberFormat::from_opt(f)?,
-            None => LineNumberFormat::Rn,
-        };
-
-        let increment = match args.value_of("increment") {
-            Some(i) => i.parse::<u32>()?,
-            None => 1,
-        };
-
-        let startnum = match args.value_of("initial-value") {
-            Some(i) => i.parse::<u32>()?,
-            None => 1,
-        };
+        let restart = args.is_present("restart");
 
         Ok(Cli {
             blanks: 1,
@@ -177,14 +194,26 @@ impl<'a> Cli<'a> {
             header,
             startnum,
             increment,
-            restart: true,
-            width: 6,
+            restart,
+            width,
+            file,
         })
     }
 
     /// Output a file to `stdout` annotated with numbering in the style specified by
     /// the user through command line flags.
-    pub fn filter<T: BufRead>(self, input: T) -> Result<(), io::Error> {
+    pub fn filter(self) -> Result<(), NlError<'a>> {
+        let stdin = stdin();
+        match self.file {
+            FileType::File(f) => {
+                let file = File::open(f)?;
+                self.try_filter(&mut BufReader::new(file))
+            }
+            FileType::Stdin => self.try_filter(&mut stdin.lock()),
+        }
+    }
+
+    fn try_filter<T: BufRead>(self, input: T) -> Result<(), NlError<'a>> {
         let mut num = self.startnum;
         for line in input.lines() {
             let line = line?;
@@ -226,6 +255,30 @@ mod tests {
                 (NumberingType::All, NumberingType::All) => true,
                 (NumberingType::None, NumberingType::None) => true,
                 (NumberingType::NonEmpty, NumberingType::NonEmpty) => true,
+                _ => false,
+            }
+        }
+    }
+
+    impl<'a> PartialEq for NlError<'a> {
+        fn eq(&self, other: &Self) -> bool {
+            match (self, other) {
+                (NlError::BadRegex(left), NlError::BadRegex(right)) => {
+                    left == right
+                }
+                (NlError::EmptyRegex, NlError::EmptyRegex) => true,
+                (
+                    NlError::IllegalFormat(left),
+                    NlError::IllegalFormat(right),
+                ) => left == right,
+                (
+                    NlError::IllegalNumberingType(left),
+                    NlError::IllegalNumberingType(right),
+                ) => left == right,
+                (NlError::InvalidNumber, NlError::InvalidNumber) => true,
+                (NlError::IoError(left), NlError::IoError(right)) => {
+                    left.kind() == right.kind()
+                }
                 _ => false,
             }
         }

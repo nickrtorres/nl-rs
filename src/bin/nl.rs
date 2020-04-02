@@ -64,29 +64,21 @@
 //
 //	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
 //	  All Rights Reserved
-use clap::{App, Arg};
+use clap::{self, App, Arg, ArgMatches};
 use lazy_static::lazy_static;
 use program::Program;
-use std::fs::File;
-use std::io::{self, stderr, stdin, BufReader, Write};
+use std::io::{stderr, Write};
 use std::process::exit;
 
 extern crate nl_rs;
-use nl_rs::Cli;
+use nl_rs::{Cli, NlError};
 
 lazy_static! {
     static ref NL: Program = Program::new("nl");
 }
 
-fn try_main<'a>(cli: Cli, filename: Option<&str>) -> Result<(), io::Error> {
-    let stdin = stdin();
-    match filename {
-        Some(f) => {
-            let file = File::open(f)?;
-            cli.filter(&mut BufReader::new(file))
-        }
-        None => cli.filter(&mut stdin.lock()),
-    }
+fn try_main<'a>(args: &'a ArgMatches) -> Result<(), NlError<'a>> {
+    Cli::new(&args).and_then(|cli| cli.filter())
 }
 
 fn main() {
@@ -103,16 +95,13 @@ fn main() {
         .arg(Arg::with_name("initial-value").short("v").takes_value(true))
         .arg(Arg::with_name("restart-at-page").short("p"))
         .arg(Arg::with_name("width").short("w").takes_value(true))
-        .get_matches_safe();
+        .get_matches_safe()
+        .unwrap_or_else(|e| {
+            let _ = write!(stderr(), "{}", e);
+            exit(0)
+        });
 
-    let matches = args.unwrap_or_else(|e| {
-        let _ = write!(stderr(), "{}", e);
-        exit(0);
-    });
-
-    let cli = Cli::new(&matches).unwrap_or_else(|e| NL.perror(e));
-
-    if let Err(e) = try_main(cli, matches.value_of("file")) {
+    if let Err(e) = try_main(&args) {
         NL.perror(e);
     }
 }
