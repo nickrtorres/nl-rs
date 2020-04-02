@@ -9,7 +9,10 @@ use std::fmt;
 use std::fs::File;
 use std::io::{self, stdin, stdout, BufRead, BufReader, Write};
 use std::num;
+use std::result;
 use std::str::FromStr;
+
+type Result<'a, T> = result::Result<T, NlError<'a>>;
 
 #[derive(Debug)]
 /// Variants for what can go wrong when running `nl(1)`
@@ -76,7 +79,7 @@ enum NumberingType {
 }
 
 impl NumberingType {
-    fn from_opt(s: Option<&str>) -> Result<Self, NlError> {
+    fn from_opt(s: Option<&str>) -> Result<Self> {
         match s {
             None | Some("t") => Ok(Self::NonEmpty),
             Some("a") => Ok(Self::All),
@@ -114,7 +117,7 @@ enum LineNumberFormat {
 }
 
 impl LineNumberFormat {
-    fn from_opt(opt: Option<&str>) -> Result<Self, NlError<'_>> {
+    fn from_opt(opt: Option<&str>) -> Result<Self> {
         match opt {
             None | Some("rn") => Ok(Self::Rn),
             Some("ln") => Ok(Self::Ln),
@@ -157,7 +160,7 @@ pub struct Cli<'a> {
 fn parse_str_or<F: FromStr>(
     s: Option<&str>,
     default: F,
-) -> Result<F, <F as FromStr>::Err> {
+) -> result::Result<F, <F as FromStr>::Err> {
     s.map_or(Ok(default), str::parse)
 }
 
@@ -173,7 +176,7 @@ impl<'a> Cli<'a> {
     /// (1) a numeric option is specified and a non-numeric value is given
     /// (2) a non-canonical numbering type is given
     /// (3) a non-canonical numbering format is given
-    pub fn new(args: &'a ArgMatches) -> Result<Self, NlError<'a>> {
+    pub fn new(args: &'a ArgMatches) -> Result<'a, Self> {
         let body = NumberingType::from_opt(args.value_of("body-type"))?;
 
         let header = NumberingType::from_opt(args.value_of("header-type"))?;
@@ -221,7 +224,7 @@ impl<'a> Cli<'a> {
     /// from a file, etc.),
     ///
     /// All io errors are converted to `NlError`s that wrap the outstanding `io::Error`
-    pub fn filter(self) -> Result<(), NlError<'a>> {
+    pub fn filter(self) -> Result<'a, ()> {
         let stdin = stdin();
         match self.file {
             FileType::File(f) => {
@@ -232,7 +235,7 @@ impl<'a> Cli<'a> {
         }
     }
 
-    fn try_filter<T: BufRead>(self, input: T) -> Result<(), NlError<'a>> {
+    fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
         let mut num = self.startnum;
         for line in input.lines() {
             let line = line?;
