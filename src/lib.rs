@@ -127,6 +127,7 @@ impl LineNumberFormat {
         }
     }
 
+    // This does not perform well. Everytime it's called a new string is allocated
     fn as_string(&self, num: Option<u32>, width: usize) -> String {
         // TODO can num be &str ?
         let num = num.map_or_else(|| " ".to_string(), |n| n.to_string());
@@ -270,8 +271,9 @@ impl<'a> Cli<'a> {
             };
         }
 
+        // preallocate to avoid resizing initially
         let mut types: HashMap<usize, &'s NumberingType> = {
-            let mut m = HashMap::new();
+            let mut m = HashMap::with_capacity(8);
             m.insert(2_usize, body);
             m.insert(4_usize, footer);
             m.insert(6_usize, header);
