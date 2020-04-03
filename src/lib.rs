@@ -278,7 +278,7 @@ impl<'a> Cli<'a> {
             return None;
         }
 
-        // preallocate to avoid resizing initially
+        // TODO move this into an instance variable
         let mut types: HashMap<usize, &NumberingType> = {
             let mut m = HashMap::with_capacity(8);
             m.insert(2_usize, &self.footer);
