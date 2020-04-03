@@ -314,7 +314,7 @@ impl<'a> Cli<'a> {
                 continue;
             };
 
-            // :(
+            // TODO clean this up
             let n = match &current_numbering {
                 NumberingType::All => {
                     if line.is_empty() && adj < self.blanks {
@@ -342,6 +342,8 @@ impl<'a> Cli<'a> {
                 _ => None,
             };
 
+            // TODO this is slow. preallocate and reuse a buffer to avoid
+            // an allocation on every line
             writeln!(
                 stdout(),
                 "{}\t{}",
