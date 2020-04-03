@@ -2,7 +2,6 @@
 
 use clap::ArgMatches;
 use regex::{self, Regex};
-use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fs::File;
@@ -161,7 +160,7 @@ pub struct Cli<'a> {
     norestart: bool,
     width: usize,
     file: FileType<'a>,
-    states: HashMap<usize, char>,
+    states: Vec<char>,
 }
 
 fn parse_str_or<F: FromStr>(
@@ -214,7 +213,7 @@ impl<'a> Cli<'a> {
 
         let norestart = args.is_present("restart");
 
-        let delim = args.value_of("delim").map_or(
+        let states = args.value_of("delim").map_or(
             Ok(vec!['\\', ':']),
             |s| -> Result<Vec<char>> {
                 // TODO SUS says this can be 0 < s.len() <= 2
@@ -225,14 +224,7 @@ impl<'a> Cli<'a> {
                 Ok(s.chars().collect::<Vec<char>>())
             },
         )?;
-
-        assert!(delim.len() == 2);
-        let states: HashMap<usize, char> = {
-            let mut m = HashMap::new();
-            m.insert(0, delim[0]);
-            m.insert(1, delim[1]);
-            m
-        };
+        assert!(states.len() == 2);
 
         Ok(Cli {
             blanks,
@@ -282,23 +274,15 @@ impl<'a> Cli<'a> {
             return None;
         }
 
-        // TODO move this into an instance variable
-        let types: HashMap<usize, &NumberingType> = {
-            let mut m: HashMap<usize, &NumberingType> =
-                HashMap::with_capacity(8);
-            m.insert(2, &self.footer);
-            m.insert(4, &self.body);
-            m.insert(6, &self.header);
-            m
-        };
-
+        let types =
+            vec![Some(&self.header), Some(&self.body), Some(&self.footer)];
         for (state, c) in line.chars().enumerate() {
-            if (*self.states.get(&(state % 2))?) != c {
+            if (self.states[state % 2]) != c {
                 return None;
             }
         }
 
-        Some(*types.get(&line.len())?)
+        types[line.len() % 3]
     }
 
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
@@ -308,14 +292,19 @@ impl<'a> Cli<'a> {
         for line in input.lines() {
             let line = line?;
 
-            if let Some(s) = self.section(&line) {
-                if ptr::eq(s, &self.header) && !self.norestart {
-                    num = self.startnum;
-                }
+            if self
+                .section(&line)
+                .map(|s| {
+                    if ptr::eq(s, &self.header) && !self.norestart {
+                        num = self.startnum;
+                    }
 
-                current_numbering = s;
+                    current_numbering = s;
+                })
+                .is_some()
+            {
                 continue;
-            };
+            }
 
             // TODO clean this up
             let n = match &current_numbering {
