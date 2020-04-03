@@ -278,17 +278,13 @@ impl<'a> Cli<'a> {
             m
         };
 
-        let mut state: usize = 0;
-        for c in line.chars() {
-            if c == STATES[&state] {
-                state += 1
-            } else {
-                break;
+        for (state, c) in line.chars().enumerate() {
+            if c != STATES[&state] {
+                return None;
             }
         }
 
-        assert!(state <= 6);
-        types.remove(&state)
+        types.remove(&line.len())
     }
 
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
