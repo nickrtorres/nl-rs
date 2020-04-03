@@ -1,7 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
 use clap::ArgMatches;
-use lazy_static::lazy_static;
 use regex::{self, Regex};
 use std::collections::HashMap;
 use std::error;
@@ -32,6 +31,8 @@ pub enum NlError<'a> {
     InvalidNumber,
     /// An I/O error occured while running the program
     IoError(io::Error),
+    /// An invalid delimeter was specified
+    InvalidDelim(&'a str),
 }
 
 impl<'a> error::Error for NlError<'a> {}
@@ -51,6 +52,9 @@ impl<'a> fmt::Display for NlError<'a> {
             NlError::IllegalFormat(e) => write!(f, "illegal format -- {}", e),
             NlError::InvalidNumber => write!(f, "invalid num argument"),
             NlError::IoError(e) => write!(f, "{}", e.to_string()),
+            NlError::InvalidDelim(d) => {
+                write!(f, "invalid delim argument -- {}", d.to_string())
+            }
         }
     }
 }
@@ -148,7 +152,6 @@ enum FileType<'a> {
 pub struct Cli<'a> {
     blanks: u32,
     body: NumberingType,
-    delim: &'a str,
     footer: NumberingType,
     format: LineNumberFormat,
     header: NumberingType,
@@ -209,19 +212,28 @@ impl<'a> Cli<'a> {
 
         let norestart = args.is_present("restart");
 
-        let delim = args.value_of("delim").unwrap_or("\\:");
+        let delim = args.value_of("delim").map_or(
+            Ok(vec!['\\', ':']),
+            |s| -> Result<Vec<char>> {
+                if s.len() != 2 {
+                    return Err(NlError::InvalidDelim(s));
+                }
 
+                Ok(s.chars().collect::<Vec<char>>())
+            },
+        )?;
+
+        assert!(delim.len() == 2);
         let states: HashMap<usize, char> = {
             let mut m = HashMap::new();
-            m.insert(0, '\\');
-            m.insert(1, ':');
+            m.insert(0, delim[0]);
+            m.insert(1, delim[1]);
             m
         };
 
         Ok(Cli {
             blanks,
             body,
-            delim,
             footer,
             format,
             header,
