@@ -280,7 +280,7 @@ impl<'a> Cli<'a> {
         }
 
         // TODO move this into an instance variable
-        let mut types: HashMap<usize, &NumberingType> = {
+        let types: HashMap<usize, &NumberingType> = {
             let mut m: HashMap<usize, &NumberingType> =
                 HashMap::with_capacity(8);
             m.insert(2, &self.footer);
@@ -295,7 +295,7 @@ impl<'a> Cli<'a> {
             }
         }
 
-        types.remove(&line.len())
+        Some(*types.get(&line.len())?)
     }
 
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
