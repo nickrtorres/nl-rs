@@ -280,10 +280,11 @@ impl<'a> Cli<'a> {
 
         // TODO move this into an instance variable
         let mut types: HashMap<usize, &NumberingType> = {
-            let mut m = HashMap::with_capacity(8);
-            m.insert(2_usize, &self.footer);
-            m.insert(4_usize, &self.body);
-            m.insert(6_usize, &self.header);
+            let mut m: HashMap<usize, &NumberingType> =
+                HashMap::with_capacity(8);
+            m.insert(2, &self.footer);
+            m.insert(4, &self.body);
+            m.insert(6, &self.header);
             m
         };
 
