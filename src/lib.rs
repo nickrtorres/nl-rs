@@ -215,6 +215,7 @@ impl<'a> Cli<'a> {
         let delim = args.value_of("delim").map_or(
             Ok(vec!['\\', ':']),
             |s| -> Result<Vec<char>> {
+                // TODO SUS says this can be 0 < s.len() <= 2
                 if s.len() != 2 {
                     return Err(NlError::InvalidDelim(s));
                 }
