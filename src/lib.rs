@@ -272,9 +272,9 @@ impl<'a> Cli<'a> {
 
         let mut types: HashMap<usize, &'s NumberingType> = {
             let mut m = HashMap::new();
-            m.insert(2usize, body);
-            m.insert(4usize, footer);
-            m.insert(6usize, header);
+            m.insert(2_usize, body);
+            m.insert(4_usize, footer);
+            m.insert(6_usize, header);
             m
         };
 
