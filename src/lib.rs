@@ -157,6 +157,7 @@ pub struct Cli<'a> {
     norestart: bool,
     width: usize,
     file: FileType<'a>,
+    states: HashMap<usize, char>,
 }
 
 fn parse_str_or<F: FromStr>(
@@ -210,6 +211,13 @@ impl<'a> Cli<'a> {
 
         let delim = args.value_of("delim").unwrap_or("\\:");
 
+        let states: HashMap<usize, char> = {
+            let mut m = HashMap::new();
+            m.insert(0, '\\');
+            m.insert(1, ':');
+            m
+        };
+
         Ok(Cli {
             blanks,
             body,
@@ -222,6 +230,7 @@ impl<'a> Cli<'a> {
             norestart,
             width,
             file,
+            states,
         })
     }
 
@@ -252,36 +261,22 @@ impl<'a> Cli<'a> {
     /// `None` if a section transition is unneeded
     /// `Some(type)` if a tranisition is needed, where type is the new current numbering
     /// type
-    fn section<'s>(
-        line: &str,
-        header: &'s NumberingType,
-        footer: &'s NumberingType,
-        body: &'s NumberingType,
-    ) -> Option<&'s NumberingType> {
+    fn section(&self, line: &str) -> Option<&NumberingType> {
         if line.len() > 6 || line.len() < 2 {
             return None;
         }
 
-        lazy_static! {
-            static ref STATES: HashMap<usize, char> = {
-                let mut m = HashMap::new();
-                m.insert(0, '\\');
-                m.insert(1, ':');
-                m
-            };
-        }
-
         // preallocate to avoid resizing initially
-        let mut types: HashMap<usize, &'s NumberingType> = {
+        let mut types: HashMap<usize, &NumberingType> = {
             let mut m = HashMap::with_capacity(8);
-            m.insert(2_usize, body);
-            m.insert(4_usize, footer);
-            m.insert(6_usize, header);
+            m.insert(2_usize, &self.footer);
+            m.insert(4_usize, &self.body);
+            m.insert(6_usize, &self.header);
             m
         };
 
         for (state, c) in line.chars().enumerate() {
-            if c != STATES[&(state % 2)] {
+            if c != self.states[&(state % 2)] {
                 return None;
             }
         }
@@ -296,9 +291,7 @@ impl<'a> Cli<'a> {
         for line in input.lines() {
             let line = line?;
 
-            if let Some(s) =
-                Cli::section(&line, &self.header, &self.footer, &self.body)
-            {
+            if let Some(s) = self.section(&line) {
                 if ptr::eq(s, &self.header) && !self.norestart {
                     num = self.startnum;
                 }
@@ -487,56 +480,32 @@ mod tests {
 
     #[test]
     fn it_can_determine_its_section_non_delim() {
-        assert_eq!(
-            None,
-            Cli::section(
-                "foobar",
-                &NumberingType::None,
-                &NumberingType::None,
-                &NumberingType::None
-            )
-        );
+        let args = ArgMatches::new();
+        let cli = Cli::new(&args).unwrap();
+        assert_eq!(None, cli.section("foobar"));
     }
 
     #[test]
     fn it_can_determine_its_section_header() {
-        let header = NumberingType::NonEmpty;
-        assert_eq!(
-            Some(&header),
-            Cli::section(
-                "\\:\\:\\:",
-                &header,
-                &NumberingType::None,
-                &NumberingType::None
-            )
-        );
+        let args = ArgMatches::new();
+        let header = NumberingType::None;
+        let cli = Cli::new(&args).unwrap();
+        assert_eq!(Some(&header), cli.section("\\:\\:\\:"));
     }
 
     #[test]
     fn it_can_determine_its_section_footer() {
-        let footer = NumberingType::NonEmpty;
-        assert_eq!(
-            Some(&footer),
-            Cli::section(
-                "\\:\\:",
-                &NumberingType::None,
-                &footer,
-                &NumberingType::None
-            )
-        );
+        let args = ArgMatches::new();
+        let footer = NumberingType::None;
+        let cli = Cli::new(&args).unwrap();
+        assert_eq!(Some(&footer), cli.section("\\:"));
     }
 
     #[test]
     fn it_can_determine_its_section_body() {
+        let args = ArgMatches::new();
         let body = NumberingType::NonEmpty;
-        assert_eq!(
-            Some(&body),
-            Cli::section(
-                "\\:",
-                &NumberingType::None,
-                &NumberingType::None,
-                &body,
-            )
-        );
+        let cli = Cli::new(&args).unwrap();
+        assert_eq!(Some(&body), cli.section("\\:\\:"));
     }
 }
