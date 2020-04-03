@@ -274,15 +274,14 @@ impl<'a> Cli<'a> {
             return None;
         }
 
-        let types =
-            vec![Some(&self.header), Some(&self.body), Some(&self.footer)];
+        let types = vec![&self.header, &self.body, &self.footer];
         for (state, c) in line.chars().enumerate() {
             if (self.states[state % 2]) != c {
                 return None;
             }
         }
 
-        types[line.len() % 3]
+        Some(types[line.len() % 3])
     }
 
     fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
