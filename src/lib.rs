@@ -53,7 +53,7 @@ impl<'a> fmt::Display for NlError<'a> {
             NlError::InvalidNumber => write!(f, "invalid num argument"),
             NlError::IoError(e) => write!(f, "{}", e.to_string()),
             NlError::InvalidDelim(d) => {
-                write!(f, "invalid delim argument -- {}", d.to_string())
+                write!(f, "invalid delim argument -- {}", (*d).to_string())
             }
         }
     }
