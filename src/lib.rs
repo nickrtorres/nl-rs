@@ -289,7 +289,7 @@ impl<'a> Cli<'a> {
         };
 
         for (state, c) in line.chars().enumerate() {
-            if c != self.states[&(state % 2)] {
+            if (*self.states.get(&(state % 2))?) != c {
                 return None;
             }
         }
