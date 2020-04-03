@@ -21,13 +21,13 @@ pub enum NlError<'a> {
     BadRegex(regex::Error),
     /// The Regex option was specified, but no regex was provided
     EmptyRegex,
-    /// A non-canonical (left justified w/o zeros, right justified w/o zeros, right justified w/
-    /// zeros) numbering format  was given
+    /// A non-canonical (left justified w/o zeros, right justified w/o zeros,
+    /// right justified w/ zeros) numbering format  was given
     IllegalFormat(&'a str),
     /// A non-canonical (all, non-empty, none, regex) numbering type was given
     IllegalNumberingType(&'a str),
-    /// An option that required an integer was specified, but a non-integral type was given as the
-    /// parameter
+    /// An option that required an integer was specified, but a non-integral
+    /// type was given as the parameter
     InvalidNumber,
     /// An I/O error occured while running the program
     IoError(io::Error),
@@ -131,7 +131,8 @@ impl LineNumberFormat {
         }
     }
 
-    // This does not perform well. Everytime it's called a new string is allocated
+    // This does not perform well. Everytime it's called a new string is
+    // allocated
     fn as_string(&self, num: Option<u32>, width: usize) -> String {
         // TODO can num be &str ?
         let num = num.map_or_else(|| " ".to_string(), |n| n.to_string());
@@ -171,11 +172,12 @@ fn parse_str_or<F: FromStr>(
 }
 
 impl<'a> Cli<'a> {
-    /// Parsing command line options is tricky. The options are *optional*. Additionally,
-    /// a user can provide invalid input (e.g. empty input, non numeric input for a numeric option,
-    /// etc.). In anycase, we need to deterministically evaluate what the user provides and store it
-    /// when it's valid, propogate an error when it's invalid, or default to a well-defined value when
-    /// it's absent.
+    /// Parsing command line options is tricky. The options are *optional*.
+    /// Additionally, a user can provide invalid input (e.g. empty input,
+    /// non numeric input for a numeric option, etc.). In anycase, we need
+    /// to deterministically evaluate what the user provides and store it
+    /// when it's valid, propogate an error when it's invalid, or default to a
+    /// well-defined value when it's absent.
     ///
     /// # Errors
     /// `Cli::new` will return on error if:
@@ -247,13 +249,14 @@ impl<'a> Cli<'a> {
         })
     }
 
-    /// Output a file to `stdout` annotated with numbering in the style specified by
-    /// the user through command line flags.
+    /// Output a file to `stdout` annotated with numbering in the style
+    /// specified by the user through command line flags.
     /// # Errors
-    /// Filter can fail on numerous `io::Error`s (e.g. unable to open a file, unable to read lines
-    /// from a file, etc.),
+    /// Filter can fail on numerous `io::Error`s (e.g. unable to open a file,
+    /// unable to read lines from a file, etc.),
     ///
-    /// All io errors are converted to `NlError`s that wrap the outstanding `io::Error`
+    /// All io errors are converted to `NlError`s that wrap the outstanding
+    /// `io::Error`
     pub fn filter(self) -> Result<'a, ()> {
         let stdin = stdin();
         match self.file {
@@ -272,8 +275,8 @@ impl<'a> Cli<'a> {
     ///
     /// # Returns
     /// `None` if a section transition is unneeded
-    /// `Some(type)` if a tranisition is needed, where type is the new current numbering
-    /// type
+    /// `Some(type)` if a tranisition is needed, where type is the new current
+    /// numbering type
     fn section(&self, line: &str) -> Option<&NumberingType> {
         if line.len() > 6 || line.len() < 2 {
             return None;
