@@ -258,15 +258,15 @@ impl<'a> Cli<'a> {
         footer: &'s NumberingType,
         body: &'s NumberingType,
     ) -> Option<&'s NumberingType> {
+        if line.len() > 6 || line.len() < 2 {
+            return None;
+        }
+
         lazy_static! {
             static ref STATES: HashMap<usize, char> = {
                 let mut m = HashMap::new();
                 m.insert(0, '\\');
                 m.insert(1, ':');
-                m.insert(2, '\\');
-                m.insert(3, ':');
-                m.insert(4, '\\');
-                m.insert(5, ':');
                 m
             };
         }
@@ -281,7 +281,7 @@ impl<'a> Cli<'a> {
         };
 
         for (state, c) in line.chars().enumerate() {
-            if c != STATES[&state] {
+            if c != STATES[&(state % 2)] {
                 return None;
             }
         }
