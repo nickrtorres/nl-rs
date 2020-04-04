@@ -70,22 +70,17 @@
 extern crate nl_rs;
 
 use clap::{self, App, Arg, ArgMatches};
-use lazy_static::lazy_static;
 use nl_rs::{Cli, NlError};
-use program::Program;
+use program::perror;
 use std::io::{stderr, Write};
 use std::process::exit;
-
-lazy_static! {
-    static ref NL: Program = Program::new("nl");
-}
 
 fn try_main<'a>(args: &'a ArgMatches) -> Result<(), NlError<'a>> {
     Cli::new(args).and_then(Cli::filter)
 }
 
 fn main() {
-    let args = App::new(NL.name)
+    let args = App::new("nl")
         .version("0.0.1")
         .arg(Arg::with_name("blanks").short("l").takes_value(true))
         .arg(Arg::with_name("body-type").short("b").takes_value(true))
@@ -105,6 +100,6 @@ fn main() {
         });
 
     if let Err(e) = try_main(&args) {
-        NL.perror(e);
+        perror(e);
     }
 }
