@@ -143,11 +143,6 @@ impl LineNumberFormat {
     }
 }
 
-enum FileType<'a> {
-    File(&'a str),
-    Stdin,
-}
-
 /// An opaque structure to store command line options specified by the user.
 pub struct Cli<'a> {
     blanks: u32,
@@ -159,7 +154,7 @@ pub struct Cli<'a> {
     startnum: u32,
     norestart: bool,
     width: usize,
-    file: FileType<'a>,
+    file: Option<&'a str>,
     states: [char; 2],
 }
 
@@ -206,10 +201,7 @@ impl<'a> Cli<'a> {
 
         let width = parse_str_or(args.value_of("width"), 6)?;
 
-        let file = match args.value_of("file") {
-            Some(f) => FileType::File(f),
-            None => FileType::Stdin,
-        };
+        let file = args.value_of("file");
 
         let norestart = args.is_present("restart");
 
@@ -253,13 +245,14 @@ impl<'a> Cli<'a> {
     /// `io::Error`
     pub fn filter(self) -> Result<'a, ()> {
         let stdin = stdin();
-        match self.file {
-            FileType::File(f) => {
-                let file = File::open(f)?;
-                self.try_filter(&mut BufReader::new(file))
-            }
-            FileType::Stdin => self.try_filter(&mut stdin.lock()),
-        }
+        self.file.map_or_else(
+            || self.try_filter(&mut stdin.lock()),
+            |f| {
+                File::open(f).map_err(NlError::IoError).and_then(|file| {
+                    self.try_filter(&mut BufReader::new(file))
+                })
+            },
+        )
     }
 
     /// Gets the appropriate section transition based on the given line
@@ -288,7 +281,7 @@ impl<'a> Cli<'a> {
         Some(types[line.len() % 3])
     }
 
-    fn try_filter<T: BufRead>(self, input: T) -> Result<'a, ()> {
+    fn try_filter<T: BufRead>(&self, input: T) -> Result<'a, ()> {
         let mut adj = 1;
         let mut current_numbering = &self.body;
         let mut num = self.startnum;
