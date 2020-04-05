@@ -288,17 +288,12 @@ impl<'a> Cli<'a> {
         for line in input.lines() {
             let line = line?;
 
-            if self
-                .section(&line)
-                .map(|s| {
-                    if ptr::eq(s, &self.header) && !self.norestart {
-                        num = self.startnum;
-                    }
+            if let Some(s) = self.section(&line) {
+                if ptr::eq(s, &self.header) && !self.norestart {
+                    num = self.startnum;
+                }
 
-                    current_numbering = s;
-                })
-                .is_some()
-            {
+                current_numbering = s;
                 continue;
             }
 
