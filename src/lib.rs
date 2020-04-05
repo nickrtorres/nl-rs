@@ -160,7 +160,7 @@ pub struct Cli<'a> {
     norestart: bool,
     width: usize,
     file: FileType<'a>,
-    states: Vec<char>,
+    states: [char; 2],
 }
 
 fn parse_str_or<F: FromStr>(
@@ -214,17 +214,19 @@ impl<'a> Cli<'a> {
         let norestart = args.is_present("restart");
 
         let states = args.value_of("delim").map_or(
-            Ok(vec!['\\', ':']),
-            |s| -> Result<Vec<char>> {
+            Ok(['\\', ':']),
+            |s| -> Result<[char; 2]> {
                 // TODO SUS says this can be 0 < s.len() <= 2
                 if s.len() != 2 {
                     return Err(NlError::InvalidDelim(s));
                 }
 
-                Ok(s.chars().collect::<Vec<char>>())
+                Ok([
+                    s.chars().next().ok_or(NlError::InvalidDelim(s))?,
+                    s.chars().next().ok_or(NlError::InvalidDelim(s))?,
+                ])
             },
         )?;
-        assert!(states.len() == 2);
 
         Ok(Cli {
             blanks,
@@ -274,7 +276,9 @@ impl<'a> Cli<'a> {
             return None;
         }
 
-        let types = vec![&self.header, &self.body, &self.footer];
+        let types: [&NumberingType; 3] =
+            [&self.header, &self.body, &self.footer];
+
         for (state, c) in line.chars().enumerate() {
             if (self.states[state % 2]) != c {
                 return None;
