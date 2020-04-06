@@ -134,7 +134,7 @@ impl LineNumberFormat {
     // allocated
     fn as_string(&self, num: Option<u32>, width: usize) -> String {
         // TODO can num be &str ?
-        let num = num.map_or_else(|| " ".to_string(), |n| n.to_string());
+        let num = num.map_or_else(|| String::from(" "), |n| n.to_string());
         match self {
             Self::Ln => format!("{:<width$}", num, width = width),
             Self::Rn => format!("{:>width$}", num, width = width),
