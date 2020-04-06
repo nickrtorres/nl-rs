@@ -69,15 +69,11 @@
 //	  All Rights Reserved
 extern crate nl_rs;
 
-use clap::{self, App, Arg, ArgMatches};
-use nl_rs::{Cli, NlError};
+use clap::{self, App, Arg};
+use nl_rs::Cli;
 use program::perror;
 use std::io::{stderr, Write};
 use std::process::exit;
-
-fn try_main<'a>(args: &'a ArgMatches) -> Result<(), NlError<'a>> {
-    Cli::new(args).and_then(Cli::filter)
-}
 
 fn main() {
     let args = App::new("nl")
@@ -99,7 +95,7 @@ fn main() {
             exit(0)
         });
 
-    if let Err(e) = try_main(&args) {
+    if let Err(e) = Cli::new(&args).and_then(Cli::filter) {
         perror(e);
     }
 }
